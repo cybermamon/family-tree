@@ -174,7 +174,7 @@ img{max-width:100%}
 const DATA = window.__DATA;
 (function(){
 const W=168,H=64,GX=14,GY=60;
-const P={},F={};let scopeCache=null;
+const P={},F={};
 const CLIP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 7"/></svg>';
 const SIL='<svg viewBox="0 0 30 38" aria-hidden="true"><circle cx="15" cy="11" r="8"/><path d="M1 38c0-9 6-15 14-15s14 6 14 15z"/></svg>';
 
@@ -228,7 +228,7 @@ function fmtDate(d){if(!d)return'';return d.replace(/\bABT\b/i,'about').replace(
 });
 const BASE_P=JSON.parse(JSON.stringify(P)),BASE_F=JSON.parse(JSON.stringify(F));
 let OV_P={},OV_F={};
-function rebuild(){scopeCache=null;
+function rebuild(){
   for(const k in P)delete P[k];for(const k in F)delete F[k];
   const bp=JSON.parse(JSON.stringify(BASE_P)),bf=JSON.parse(JSON.stringify(BASE_F));Object.assign(P,bp);Object.assign(F,bf);
   for(const id in OV_F){const o=OV_F[id];if(o.deleted){delete F[id];continue}
@@ -381,20 +381,9 @@ sheet.addEventListener('change',e=>{const s=e.target.closest('select[data-add]')
 // ---------- editing (saved to the page's shared database) ----------
 let db=null;
 const canEdit=()=>!!db&&!db.readOnly;
-// family admins: they edit their own ancestors and descendants, plus anyone (in-laws and their families) who is closer to them than to any other family admin
-
-function limited(){const pm=window.__PERM;return !!(pm&&pm.role==='family_admin')}
-function scope(){if(!limited())return null;if(scopeCache)return scopeCache;const pm=window.__PERM,me=pm.person,set=new Set();scopeCache=set;
-  if(!me||!P[me])return set;
-  const nb=id=>{const f=parentsOf(id),out=f?[f.husb,f.wife]:[];famsOf(id).forEach(x=>{out.push(spouseIn(x,id),...x.chil)});return out.filter(z=>z&&P[z])};
-  const bfs=starts=>{const d={};let q=starts.filter(x=>P[x]);q.forEach(x=>d[x]=0);for(let i=0;i<q.length;i++){const x=q[i];for(const y of nb(x))if(!(y in d)){d[y]=d[x]+1;q.push(y)}}return d};
-  const dMe=bfs([me]),dOt=bfs((pm.others||[]).filter(x=>x!==me));
-  const up=id=>{if(set.has(id))return;set.add(id);const f=parentsOf(id);if(f)[f.husb,f.wife].forEach(x=>x&&P[x]&&up(x))};
-  const down=id=>{set.add(id);famsOf(id).forEach(f=>f.chil.forEach(c=>{if(P[c]&&!set.has(c))down(c)}))};
-  up(me);down(me);
-  for(const id in dMe)if(!(id in dOt)||dMe[id]<=dOt[id])set.add(id);
-  return set}
-const canEditP=id=>canEdit()&&(!limited()||scope().has(id));
+// on the website, members other than admins get a list of the people they may change (worked out by the server)
+function limited(){const pm=window.__PERM;return !!(pm&&pm.editable)}
+const canEditP=id=>canEdit()&&(!limited()||window.__PERM.editable.has(id));
 const keyOf=id=>id.replace(/[:@]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return m?{given:m[1].trim(),surname:m[2].trim(),suffix:m[3].trim()}:{given:(n||'').trim(),surname:'',suffix:''}}
@@ -466,7 +455,7 @@ function submitForm(o){if(!canEditP(o.mode==='edit'?o.id:o.anchor)){status('Anot
     if(o.existing){pid=o.existing;
       const already=(o.rel==='spouse'&&famsOf(a).some(f=>spouseIn(f,a)===pid))||(o.rel==='child'&&famsOf(a).some(f=>f.chil.includes(pid)))||((o.rel==='father'||o.rel==='mother'||o.rel==='sibling')&&parentsOf(a)&&[parentsOf(a).husb,parentsOf(a).wife].concat(parentsOf(a).chil).includes(pid));
       if(already){status('They are already linked',true);return}}
-    else{pid='N:@I'+uid()+'@';queue('people',pid,data)}
+    else{pid='N:@I'+uid()+'@';if(limited())window.__PERM.editable.add(pid);queue('people',pid,data)}
     const psex=data?data.sex:P[pid].sex;
     const newFam=()=>({id:'N:@F'+uid()+'@',husb:null,wife:null,chil:[],ev:{}});
     if(o.rel==='father'||o.rel==='mother'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f[o.rel==='father'?'husb':'wife']=pid;queue('families',f.id,famData(f))}
@@ -651,7 +640,7 @@ stage.addEventListener('dblclick',e=>{const el=e.target.closest('.person');if(el
 const toHash=id=>id.replace(/[:@]/g,'').replace(/^([A-Z])(I)/,'$1-$2');
 const fromHash=h=>{const m=h.match(/^([A-Za-z])-?(I\d+)$/);return m?`${m[1].toUpperCase()}:@${m[2]}@`:null};
 function setFocus(id,fromNav){if(!P[id])return;focusId=id;render(false);openSheet(id);if(!fromNav){try{history.replaceState(null,'','#'+toHash(id))}catch(e){location.hash=toHash(id)}}}
-const homeId=()=>{const h=DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase());return h?h.id:(Object.keys(P)[0]||null)};
+const homeId=()=>{if(DATA&&DATA.homeId&&P[DATA.homeId])return DATA.homeId;const h=DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase());return h?h.id:(Object.keys(P)[0]||null)};
 addEventListener('hashchange',()=>{const id=fromHash(location.hash.slice(1));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
 
 // ---------- controls ----------
@@ -806,15 +795,20 @@ async function start(){
   if(role==='blocked'){screen('blocked');return}
   if(!role||role==='pending'){screen('pending');return}
   if(booted){$('#auth').hidden=true;return}
-  let others=[];if(role==='family_admin'){const{data:fa}=await sb.rpc('family_admins');others=(fa||[]).map(r=>r.person||r).filter(x=>typeof x==='string')}
-  window.__PERM={role,person:(m&&m.person)||null,others};
-  const{data:rows,error:e2}=await sb.from('research').select('prefix,label,ged,updated_at');
-  if(e2){screen('pending',{text:'Could not load the tree: '+e2.message,err:true});return}
-  const cfgRow=rows.find(r=>r.prefix==='_config');const cfg=cfgRow?JSON.parse(cfgRow.ged):{};
+  let sources,cfg;
+  if(role==='admin'){
+    const{data:rows,error:e2}=await sb.from('research').select('prefix,label,ged,updated_at');
+    if(e2){screen('pending',{text:'Could not load the tree: '+e2.message,err:true});return}
+    const cfgRow=rows.find(r=>r.prefix==='_config');cfg=cfgRow?JSON.parse(cfgRow.ged):{};sources=rows.filter(r=>r.prefix!=='_config');
+  }else{ // everyone else gets only their own family, filtered by the server
+    let v;try{v=await treeCall({op:'read'})}catch(err){screen('pending',{text:'Could not load the tree: '+err.message,err:true});return}
+    window.__VIEW=v;sources=v.sources;cfg=v.cfg||{};window.__PERM={role,editable:new Set(v.editable||[])};
+    if(!v.homeId)setTimeout(()=>{const m=document.getElementById('meta');if(m)m.textContent='Your account isn’t linked to your profile in the tree yet. Ask the admin.'},400);
+  }
   const order=cfg.order||[];
-  const sources=rows.filter(r=>r.prefix!=='_config').sort((a,b)=>(order.indexOf(a.prefix)+1||99)-(order.indexOf(b.prefix)+1||99));
-  window.__DATA={sources,links:cfg.links||DEFAULT_CFG.links,home:cfg.home||DEFAULT_CFG.home,built:cfg.built||''};
-  if(!sources.length)setTimeout(()=>{if(role==='admin')openResearch(true);else{const m=document.getElementById('meta');if(m)m.textContent='The family tree data has not been loaded yet. Ask the admin.'}},300);
+  sources.sort((a,b)=>(order.indexOf(a.prefix)+1||99)-(order.indexOf(b.prefix)+1||99));
+  window.__DATA={sources,links:cfg.links||DEFAULT_CFG.links,home:cfg.home||DEFAULT_CFG.home,homeId:window.__VIEW&&window.__VIEW.homeId,built:cfg.built||''};
+  if(!sources.length&&role==='admin')setTimeout(()=>openResearch(true),300);
   boot();
 }
 
@@ -824,27 +818,40 @@ async function signMedia(list){
   const need=[...new Set(list.filter(v=>v&&v.asset&&!(signed[v.asset]&&signed[v.asset].exp>Date.now()+36e5)).map(v=>v.asset))];
   if(need.length){const{data}=await sb.storage.from('media').createSignedUrls(need,7*86400);(data||[]).forEach(d=>{if(d.signedUrl)signed[d.path]={url:d.signedUrl,exp:Date.now()+7*864e5}})}
   list.forEach(v=>{if(v&&v.asset&&signed[v.asset])v.url=signed[v.asset].url})}
+async function treeCall(body){const{data,error}=await sb.functions.invoke('tree',{body});
+  if(error){let msg=error.message;try{const j=await error.context.json();if(j&&j.error)msg=j.error}catch(e){}
+    if(/Failed to send|not found|404/i.test(msg))msg='The tree service isn’t set up yet. Ask the admin.';throw{code:/can’t|only view/i.test(msg)?'not_granted':'unavailable',message:msg}}
+  return data}
+async function allDocs(c){const out=[];for(let i=0;;i+=1000){const{data,error}=await sb.from('docs').select('id,data').eq('coll',c).range(i,i+999);if(error)throw error;out.push(...data);if(data.length<1000)return out}}
 function makeDb(){
-  const cache={},subs={};let chan=null;
+  const cache={},subs={};let chan=null;const admin=role==='admin';
   const emit=c=>{const docs=Object.entries(cache[c]||{}).map(([id,v])=>({id,exists:true,data:()=>v}));(subs[c]||[]).forEach(s=>s.next({docs,size:docs.length,empty:!docs.length}))};
-  async function load(c){const{data,error}=await sb.from('docs').select('id,data').eq('coll',c).limit(20000);if(error)throw error;
-    cache[c]={};data.forEach(r=>cache[c][r.id]=r.data);if(c==='media')await signMedia(Object.values(cache[c]));emit(c)}
-  function chanOn(){if(chan)return;chan=sb.channel('docs-live').on('postgres_changes',{event:'*',schema:'public',table:'docs'},async pl=>{
+  const fromView=v=>{['people','families','media'].forEach(c=>{cache[c]={};((v.docs||{})[c]||[]).forEach(([k,d])=>cache[c][k]=d)})};
+  async function load(c){
+    if(!admin){if(!cache[c])fromView(window.__VIEW);emit(c);return}
+    const data=await allDocs(c);cache[c]={};data.forEach(r=>cache[c][r.id]=r.data);if(c==='media')await signMedia(Object.values(cache[c]));emit(c)}
+  let polling=false;
+  function chanOn(){if(chan||polling)return;
+    if(!admin){polling=true;const refresh=async()=>{if(document.hidden)return;try{const v=await treeCall({op:'read'});window.__VIEW=v;
+        if(window.__PERM)v.editable.forEach(x=>window.__PERM.editable.add(x));fromView(v);['people','families','media'].forEach(emit)}catch(e){}};
+      setInterval(refresh,120000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});return}
+    chan=sb.channel('docs-live').on('postgres_changes',{event:'*',schema:'public',table:'docs'},async pl=>{
     const row=pl.eventType==='DELETE'?pl.old:pl.new;if(!row||!cache[row.coll])return;
     if(pl.eventType==='DELETE')delete cache[row.coll][row.id];else{cache[row.coll][row.id]=row.data;if(row.coll==='media')await signMedia([row.data])}
     emit(row.coll)}).subscribe()}
-  const fail=e=>({code:e&&(e.code==='42501'||/row-level security/i.test(e.message||''))?'not_granted':'unavailable',message:(e&&e.message)||'error'});
-  async function bulk(rows){const now=new Date().toISOString();
-    for(let i=0;i<rows.length;i+=400){const part=rows.slice(i,i+400).map(r=>{const data=Object.assign({},r.data);if(r.coll==='media')delete data.url;return{coll:r.coll,id:r.id,data,updated_by:me.id,updated_at:now}});
-      const{error}=await sb.from('docs').upsert(part);if(error)throw fail(error)}
-    rows.forEach(r=>{(cache[r.coll]=cache[r.coll]||{})[r.id]=r.data});[...new Set(rows.map(r=>r.coll))].forEach(emit)}
+  const fail=e=>e&&e.code&&e.message&&!e.details&&(e.code==='not_granted'||e.code==='unavailable')?e:({code:e&&(e.code==='42501'||/row-level security/i.test(e.message||''))?'not_granted':'unavailable',message:(e&&e.message)||'error'});
+  const clean=(c,d)=>{const x=Object.assign({},d);if(c==='media')delete x.url;return x};
+  async function write(rows){ // rows: [{coll,id,data}] or [{coll,id,del:true}]
+    if(admin){const now=new Date().toISOString();const ups=rows.filter(r=>!r.del),dels=rows.filter(r=>r.del);
+      for(let i=0;i<ups.length;i+=400){const{error}=await sb.from('docs').upsert(ups.slice(i,i+400).map(r=>({coll:r.coll,id:r.id,data:clean(r.coll,r.data),updated_by:me.id,updated_at:now})));if(error)throw fail(error)}
+      for(const r of dels){const{error}=await sb.from('docs').delete().eq('coll',r.coll).eq('id',r.id);if(error)throw fail(error)}return}
+    for(let i=0;i<rows.length;i+=200)await treeCall({op:'write',rows:rows.slice(i,i+200).map(r=>r.del?r:{coll:r.coll,id:r.id,data:clean(r.coll,r.data)})})}
+  async function bulk(rows){await write(rows);rows.forEach(r=>{(cache[r.coll]=cache[r.coll]||{})[r.id]=r.data});[...new Set(rows.map(r=>r.coll))].forEach(emit)}
   return{readOnly:role==='viewer',bulk,collection:c=>({
     onSnapshot(next,err){(subs[c]=subs[c]||[]).push({next,err});chanOn();load(c).catch(e=>err&&err(fail(e)));return()=>{}},
     doc:id=>({
-      async set(v){const data=Object.assign({},v);if(c==='media')delete data.url;
-        const{error}=await sb.from('docs').upsert({coll:c,id,data,updated_by:me.id,updated_at:new Date().toISOString()});if(error)throw fail(error);
-        (cache[c]=cache[c]||{})[id]=v;emit(c)},
-      async delete(){const{error}=await sb.from('docs').delete().eq('coll',c).eq('id',id);if(error)throw fail(error);if(cache[c])delete cache[c][id];emit(c)}})})}
+      async set(v){await write([{coll:c,id,data:v}]);(cache[c]=cache[c]||{})[id]=v;emit(c)},
+      async delete(){await write([{coll:c,id,del:true}]);if(cache[c])delete cache[c][id];emit(c)}})})}
 }
 const assetsApi={
   async upload(blob){const t=blob.type||'application/octet-stream';const ext=(t.split('/')[1]||'bin').replace('jpeg','jpg').replace(/[^a-z0-9]/g,'').slice(0,5);
