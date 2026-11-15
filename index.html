@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Santos Family Tree</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: full-screen pannable tree canvas under a slim toolbar; person sheet slides up from the bottom (side on desktop). */
+:root{
+  --bg:#e9ede6; --grid:#dde3d9; --fg:#1f2a24; --muted:#5d6b62; --line:#6f7d74;
+  --panel:#fbfcfa; --border:#c9d1c6; --accent:#2f6b4f; --accent-fg:#fff;
+  --m-top:#dcebf7; --m-bot:#b9d6ee; --m-edge:#8fb3d3;
+  --f-top:#fbe4ee; --f-bot:#f2c4d8; --f-edge:#d99ab6;
+  --u-top:#eef0ec; --u-bot:#d9ddd6; --u-edge:#aab3a6;
+  --focus:#e0a526; --sil:#9aa39c;
+  --font-ui:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-display:"Fraunces",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161c19; --grid:#1d2420; --fg:#e4ebe6; --muted:#9aa89f; --line:#7d8c83;
+  --panel:#1f2622; --border:#334039; --accent:#6fbf96; --accent-fg:#0f1a14;
+  --m-top:#294259; --m-bot:#1f3447; --m-edge:#4d7395;
+  --f-top:#4f2c3c; --f-bot:#3e2230; --f-edge:#8a5470;
+  --u-top:#2c332f; --u-bot:#232925; --u-edge:#4b564f;
+  --focus:#f0b93d; --sil:#7d877f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161c19; --grid:#1d2420; --fg:#e4ebe6; --muted:#9aa89f; --line:#7d8c83;
+  --panel:#1f2622; --border:#334039; --accent:#6fbf96; --accent-fg:#0f1a14;
+  --m-top:#294259; --m-bot:#1f3447; --m-edge:#4d7395;
+  --f-top:#4f2c3c; --f-bot:#3e2230; --f-edge:#8a5470;
+  --u-top:#2c332f; --u-bot:#232925; --u-edge:#4b564f;
+  --focus:#f0b93d; --sil:#7d877f; color-scheme:dark}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);display:flex;flex-direction:column;overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--border);position:relative;z-index:5}
+h1{font-family:var(--font-display);font-size:1.15rem;margin:0;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.search{position:relative;flex:1 1 180px;min-width:0;max-width:280px}
+.search input{width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.results{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:50vh;overflow:auto;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.results button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:none;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.results button:hover,.results button:focus{background:var(--bg)}
+.results small{color:var(--muted)}
+label.gen{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);cursor:pointer}
+.btn:focus-visible,select:focus-visible,.person:focus-visible,.search input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#scroller{flex:1;overflow:auto;position:relative;touch-action:pan-x pan-y;background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:22px 22px}
+#sizer{position:relative}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0}
+#stage svg{position:absolute;left:0;top:0;overflow:visible}
+#stage path{fill:none;stroke:var(--line);stroke-width:1.4}
+.person{position:absolute;box-sizing:border-box;display:flex;gap:8px;align-items:flex-start;padding:6px 8px 6px 6px;border:1px solid var(--u-edge);border-radius:4px;background:linear-gradient(var(--u-top),var(--u-bot));color:var(--fg);font:inherit;text-align:left;cursor:pointer;overflow:hidden}
+.person.M{border-color:var(--m-edge);background:linear-gradient(var(--m-top),var(--m-bot))}
+.person.F{border-color:var(--f-edge);background:linear-gradient(var(--f-top),var(--f-bot))}
+.person.focus{box-shadow:0 0 0 3px var(--focus)}
+.person.sel{outline:2px solid var(--accent);outline-offset:2px}
+.person .ph{flex:0 0 38px;height:46px;border-radius:2px;background:var(--bg);display:grid;place-items:center;position:relative;overflow:hidden}
+.person .ph svg{width:30px;height:38px;fill:var(--sil)}
+.person .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.person.dec .ph::before{z-index:1}
+#sheet .avatar{float:right;width:72px;height:88px;object-fit:cover;border-radius:6px;margin:34px 0 8px 12px;border:1px solid var(--border)}
+.person.dec .ph::before{content:"";position:absolute;left:-9px;top:4px;width:30px;height:6px;background:var(--fg);transform:rotate(-45deg);opacity:.85}
+.person .tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.person .nm{font-size:13px;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.person .yr{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.more{position:absolute;font-size:10px;line-height:1;padding:3px 6px;border-radius:9px;background:var(--accent);color:var(--accent-fg);font-weight:600;pointer-events:none}
+.zoom{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;z-index:6}
+.zoom .btn{width:40px;height:40px;font-size:18px;background:var(--panel);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+#sheet{position:fixed;z-index:15;background:var(--panel);border:1px solid var(--border);box-shadow:0 -8px 30px rgba(0,0,0,.18);overflow:auto;left:0;right:0;bottom:0;max-height:62vh;border-radius:14px 14px 0 0;padding-block:14px calc(18px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:760px){#sheet{left:auto;top:64px;bottom:16px;right:16px;width:340px;max-height:none;border-radius:12px;padding:16px}}
+#sheet h2{font-family:var(--font-display);font-size:1.3rem;margin:0 32px 2px 0;text-wrap:balance;font-weight:600}
+#sheet .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+#sheet dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0 0 12px;font-size:14px}
+#sheet dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+#sheet dd{margin:0;min-width:0}
+#sheet .rel{display:flex;flex-wrap:wrap;gap:6px}
+#sheet .rel button{font:inherit;font-size:13px;padding:4px 8px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer}
+#sheet .note{font-size:13px;line-height:1.5;color:var(--fg);white-space:pre-wrap;border-top:1px solid var(--border);padding-top:10px;margin-top:6px}
+#sheet .close{position:absolute;right:10px;top:10px;width:32px;height:32px;border-radius:50%}
+#sheet .primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;padding:8px 12px;margin-bottom:12px}
+#sheet .acts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#sheet .acts .primary{margin-bottom:0}
+.form{display:flex;flex-direction:column;gap:10px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.form input,.form select,.form textarea,#ex-text{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box;min-width:0}
+#sheet h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 0 6px;font-weight:600}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+.btn.danger{color:#b3261e;border-color:#b3261e;background:none}
+.files{border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
+.files h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-bottom:8px}
+.thumb{display:flex;flex-direction:column;gap:4px;padding:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer;overflow:hidden;text-align:left}
+.thumb img,.thumb .doc{width:100%;aspect-ratio:1;object-fit:cover;display:block;max-width:100%}
+.thumb .doc{display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--muted);background:var(--panel)}
+.thumb span.cap{font-size:11px;padding:0 6px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.person .clip{position:absolute;right:6px;bottom:5px;font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:2px}
+.person .clip svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2}
+#lb{position:fixed;inset:0;z-index:30;background:rgba(10,14,12,.92);display:flex;flex-direction:column;padding-block:calc(12px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));gap:10px}
+#lb .view{flex:1;min-height:0;display:grid;place-items:center;overflow:auto}
+#lb img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+#lb .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#eef2ef}
+#lb .bar input{flex:1 1 160px;min-width:0;font:inherit;font-size:15px;padding:7px 9px;border-radius:8px;border:1px solid #55605a;background:#1c2320;color:#eef2ef}
+#lb .btn{background:#1c2320;color:#eef2ef;border-color:#55605a}
+#lb a.btn{text-decoration:none}
+#lb .btn.danger{color:#ff8a80;border-color:#ff8a80}
+@media (prefers-reduced-motion:no-preference){.person{transition:box-shadow .15s}}
+</style>
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
+body{margin:0;font-size:14px}
+img{max-width:100%}
+#auth{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:22px 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow:auto}
+.card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.12);box-sizing:border-box}
+.card h1{font-family:var(--font-display);font-size:1.6rem;margin:0 0 4px;font-weight:600}
+.card .lede{color:var(--muted);margin:0 0 18px;line-height:1.5}
+.card form{display:flex;flex-direction:column;gap:12px}
+.card label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.card input{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
+.card .go{font:inherit;font-weight:600;font-size:15px;padding:11px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-fg);cursor:pointer}
+.card .links{display:flex;justify-content:space-between;gap:8px;margin-top:14px;font-size:13px;flex-wrap:wrap}
+.card .links button{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
+.card .msg{font-size:13px;min-height:1em;color:var(--muted)}
+.card .msg.err{color:#c0392b}
+#members{position:fixed;inset:0;z-index:35;background:rgba(10,14,12,.45);display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#members .card{max-width:560px;max-height:80vh;overflow:auto}
+.mrow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--border)}
+.mrow .who{min-width:0;overflow-wrap:anywhere}
+.mrow small{color:var(--muted);display:block}
+.mrow select{font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
+.mrow.pending{background:color-mix(in srgb,var(--focus) 12%,transparent)}
+@media (min-width:760px){#sheet{top:118px}}
+.userchip{font-size:12px;color:var(--muted);white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Santos Family Tree</h1>
+  <span class="meta" id="meta"></span>
+  <div class="tools">
+    <div class="search">
+      <input id="q" type="search" placeholder="Find a person…" autocomplete="off" aria-label="Find a person">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <label class="gen">Up <select id="up"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>8</option></select></label>
+    <label class="gen">Down <select id="down"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+    <button class="btn" id="home" type="button">Home</button>
+    <button class="btn" id="export" type="button">GEDCOM</button>
+    <span class="meta" id="savestate" aria-live="polite"></span>
+  </div>
+</header>
+<div id="scroller"><div id="sizer"><div id="stage"><svg id="lines"></svg></div></div></div>
+<div class="zoom"><button class="btn" id="zin" type="button" aria-label="Zoom in">+</button><button class="btn" id="zout" type="button" aria-label="Zoom out">−</button></div>
+<aside id="sheet" hidden></aside>
+<div id="lb" hidden role="dialog" aria-label="Attachment"></div>
+<input type="file" id="filepick" accept="image/*,application/pdf" multiple hidden>
+<input type="file" id="gedpick" accept=".ged,.txt,text/plain" hidden>
+
+<script type="text/plain" id="treecode">
+const DATA = window.__DATA;
+(function(){
+const W=168,H=64,GX=14,GY=60;
+const P={},F={};
+const CLIP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 7"/></svg>';
+const SIL='<svg viewBox="0 0 30 38" aria-hidden="true"><circle cx="15" cy="11" r="8"/><path d="M1 38c0-9 6-15 14-15s14 6 14 15z"/></svg>';
+
+// ---------- GEDCOM ----------
+function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
+  let cur=null,l1=null;
+  for(const raw of text.split(/\r?\n/)){
+    const m=raw.match(/^\s*(\d+)\s+(@[^@]+@\s+)?(\S+)(?:\s(.*))?$/); if(!m)continue;
+    const lv=+m[1],xref=m[2]&&m[2].trim(),tag=m[3],val=(m[4]||'').trim();
+    if(lv===0){l1=null;cur=null;
+      if(xref&&tag==='INDI'){cur=PP[pfx+xref]={id:pfx+xref,name:'',sex:'U',ev:{},famc:[],fams:[],notes:[],src:label,t:'I'}}
+      else if(xref&&tag==='FAM'){cur=FF[pfx+xref]={id:pfx+xref,husb:null,wife:null,chil:[],ev:{},t:'F'}}
+      continue}
+    if(!cur)continue;
+    if(lv===1){l1=tag;
+      if(cur.t==='I'){
+        if(tag==='NAME'&&!cur.name)cur.name=val;
+        else if(tag==='SEX')cur.sex=(val[0]||'U').toUpperCase();
+        else if(tag==='FAMC')cur.famc.push(pfx+val);
+        else if(tag==='FAMS')cur.fams.push(pfx+val);
+        else if(tag==='NOTE')cur.notes.push(val);
+        else if(/^(BIRT|CHR|BAPM|DEAT|BURI)$/.test(tag))cur.ev[tag]=cur.ev[tag]||{};
+      }else{
+        if(tag==='HUSB')cur.husb=pfx+val;
+        else if(tag==='WIFE')cur.wife=pfx+val;
+        else if(tag==='CHIL')cur.chil.push(pfx+val);
+        else if(tag==='MARR')cur.ev.MARR=cur.ev.MARR||{};
+      }
+    }else if(lv===2){
+      if((tag==='CONT'||tag==='CONC')&&l1==='NOTE'&&cur.notes.length){cur.notes[cur.notes.length-1]+=(tag==='CONT'?'\n':'')+val}
+      else if(cur.ev[l1]&&(tag==='DATE'||tag==='PLAC'))cur.ev[l1][tag.toLowerCase()]=val;
+      else if(l1==='NAME'&&tag==='GIVN'&&!cur.given)cur.given=val;
+    }
+  }
+}
+function niceName(n){return (n||'Unknown').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknown'}
+function year(d){if(!d)return'';const y=(d.match(/\d{4}/)||[''])[0];if(!y)return'';return(/^(ABT|EST|CAL|BEF|AFT)/i.test(d)?'c.':'')+y}
+function birthOf(p){return p.ev.BIRT||p.ev.CHR||p.ev.BAPM||{}}
+function deathOf(p){return p.ev.DEAT||p.ev.BURI||{}}
+function years(p){const b=year(birthOf(p).date),d=year(deathOf(p).date);if(!b&&!d)return'';return (b||'?')+' – '+(d||(isDead(p)?'?':''))}
+function isDead(p){if(p.ev.DEAT||p.ev.BURI)return true;const y=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return y&&y<1926}
+function fmtDate(d){if(!d)return'';return d.replace(/\bABT\b/i,'about').replace(/\bBEF\b/i,'before').replace(/\bAFT\b/i,'after').replace(/\bEST\b/i,'est.').replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/g,m=>m[0]+m.slice(1).toLowerCase())}
+
+// load base data (research GEDCOMs), then apply edits saved from this page
+(DATA&&DATA.sources||[]).forEach(s=>parseGed(s.ged,s.prefix+':',s.label));
+(DATA&&DATA.links||[]).forEach((l,i)=>{
+  const find=n=>Object.values(P).find(p=>niceName(p.name).toLowerCase()===n.toLowerCase());
+  const h=find(l.husb),w=find(l.wife);if(!h||!w)return;
+  const id='L:@F'+i+'@';F[id]={id,husb:h.id,wife:w.id,chil:[],ev:l.date?{MARR:{date:l.date}}:{},t:'F'};
+});
+const BASE_P=JSON.parse(JSON.stringify(P)),BASE_F=JSON.parse(JSON.stringify(F));
+let OV_P={},OV_F={};
+function rebuild(){
+  for(const k in P)delete P[k];for(const k in F)delete F[k];
+  const bp=JSON.parse(JSON.stringify(BASE_P)),bf=JSON.parse(JSON.stringify(BASE_F));Object.assign(P,bp);Object.assign(F,bf);
+  for(const id in OV_F){const o=OV_F[id];if(o.deleted){delete F[id];continue}
+    F[id]={id,husb:o.husb||null,wife:o.wife||null,chil:(o.chil||[]).slice(),ev:(o.marrDate||o.marrPlace)?{MARR:{date:o.marrDate||'',place:o.marrPlace||''}}:{},t:'F'}}
+  for(const id in OV_P){const o=OV_P[id];if(o.deleted){delete P[id];continue}
+    const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
+    p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
+    [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
+    p.notes=o.note?[o.note]:[]}
+  for(const id in P){P[id].famc=[];P[id].fams=[]}
+  Object.values(F).forEach(f=>{if(f.husb&&!P[f.husb])f.husb=null;if(f.wife&&!P[f.wife])f.wife=null;f.chil=f.chil.filter(c=>P[c]);
+    [f.husb,f.wife].forEach(x=>x&&P[x].fams.push(f.id));f.chil.forEach(c=>P[c].famc.push(f.id))});
+  const n=Object.keys(OV_P).length+Object.keys(OV_F).length;
+  document.getElementById('meta').textContent=Object.keys(P).length+' people'+(DATA&&DATA.built?' · research '+DATA.built:'')+(n?' · '+n+' edits':'');
+}
+rebuild();
+
+const parentsOf=id=>{const p=P[id];if(!p)return null;const f=p.famc.map(x=>F[x]).find(Boolean);return f&&(f.husb||f.wife)?f:null};
+const famsOf=id=>(P[id]?P[id].fams:[]).map(x=>F[x]).filter(Boolean);
+const spouseIn=(f,id)=>f.husb===id?f.wife:f.husb;
+const sortKids=ch=>ch.slice();
+
+// ---------- layout ----------
+let boxes=[],paths=[],UP=3,DOWN=2;
+const rowY=r=>r*(H+GY);
+function box(pid,x,r){boxes.push({pid,x,y:rowY(r)});return{x,cx:x+W/2,top:rowY(r),bot:rowY(r)+H}}
+function bracket(a,b,k){const y=a.bot+8+k*6;paths.push(`M${a.cx} ${a.bot}V${y}H${b.cx}V${b.bot}`);return{x:(a.cx+b.cx)/2,y}}
+function drop(anchor,kids){if(!kids.length)return;const top=kids[0].top,my=top-20;const xs=kids.map(k=>k.cx).concat(anchor.x);
+  let d=`M${anchor.x} ${anchor.y}V${my}M${Math.min(...xs)} ${my}H${Math.max(...xs)}`;kids.forEach(k=>d+=`M${k.cx} ${my}V${top}`);paths.push(d)}
+
+const mDesc=new Map();
+function measureDesc(pid,gen,max){const key=pid+'|'+gen+'|'+max;if(mDesc.has(key))return mDesc.get(key);
+  const fams=famsOf(pid),ns=fams.filter(f=>spouseIn(f,pid)).length,unit=W+ns*(W+GX);let cw=0,n=0;
+  if(gen<max)fams.forEach(f=>f.chil.forEach(c=>{cw+=measureDesc(c,gen+1,max);n++}));
+  const w=Math.max(unit,cw+Math.max(0,n-1)*GX);mDesc.set(key,w);return w}
+function placeDesc(pid,gen,max,x0,r){
+  const B=measureDesc(pid,gen,max),fams=famsOf(pid),ns=fams.filter(f=>spouseIn(f,pid)).length,unit=W+ns*(W+GX);
+  const me=box(pid,x0+(B-unit)/2,r);let sx=me.x+W+GX,k=0;const anchors=[];
+  fams.forEach(f=>{const s=spouseIn(f,pid);if(s){const sb=box(s,sx,r);sx+=W+GX;anchors.push(bracket(me,sb,k++))}else anchors.push({x:me.cx,y:me.bot})});
+  if(gen<max){let n=0,cw=0;fams.forEach(f=>f.chil.forEach(c=>{cw+=measureDesc(c,gen+1,max);n++}));cw+=Math.max(0,n-1)*GX;
+    let cx=x0+(B-cw)/2;fams.forEach((f,i)=>{const kids=[];f.chil.forEach(c=>{const w=measureDesc(c,gen+1,max);kids.push(placeDesc(c,gen+1,max,cx,r+1));cx+=w+GX});drop(anchors[i],kids)})}
+  return me}
+
+const mPed=new Map();
+function pedW(pid,depth){if(!pid)return 0;const key=pid+'|'+depth;if(mPed.has(key))return mPed.get(key);
+  const f=parentsOf(pid);let w=W;if(f&&depth<UP){w=Math.max(W,coupleW(f,depth+1))}mPed.set(key,w);return w}
+function coupleW(f,depth){const a=pedW(f.husb,depth),b=pedW(f.wife,depth);return a+b+(a&&b?GX:0)}
+function placePerson(pid,depth,x0,side){const w=pedW(pid,depth);const me=box(pid,side==='L'?x0+w-W:x0,-depth);
+  const f=parentsOf(pid);if(f&&depth<UP){const cw=coupleW(f,depth+1);const a=placeCouple(f,depth+1,x0+(w-cw)/2);drop(a,[me])}return me}
+function placeCouple(f,depth,x0){let a=null,b=null;
+  if(f.husb)a=placePerson(f.husb,depth,x0,'L');
+  if(f.wife)b=placePerson(f.wife,depth,x0+(f.husb?pedW(f.husb,depth)+GX:0),'R');
+  if(a&&b)return bracket(a,b,0);const o=a||b;return{x:o.cx,y:o.bot}}
+// parent row (row -1) with that parent's own siblings
+function parentRegion(pid){const gp=UP>=2?parentsOf(pid):null;const sibs=gp?gp.chil.filter(c=>c!==pid):[];
+  const n=sibs.length+1,rw=n*W+(n-1)*GX,cw=gp?coupleW(gp,2):0;return{gp,sibs,rw,cw,w:Math.max(rw,cw)}}
+function placeParent(pid,x0,side){const R=parentRegion(pid);const list=side==='L'?R.sibs.concat(pid):[pid].concat(R.sibs);
+  const rx=side==='L'?x0+R.w-R.rw:x0;let me=null;const kids=list.map((c,i)=>{const b=box(c,rx+i*(W+GX),-1);if(c===pid)me=b;return b});
+  if(R.gp){const center=rx+R.rw/2;let gx=center-R.cw/2;gx=Math.max(x0,Math.min(gx,x0+R.w-R.cw));const a=placeCouple(R.gp,2,gx);
+    drop(a,kids.slice().sort((p,q)=>p.cx-q.cx))}
+  return me}
+
+function layout(focus){
+  boxes=[];paths=[];mDesc.clear();mPed.clear();
+  const pf=UP>=1?parentsOf(focus):null;
+  if(!pf){placeDesc(focus,0,DOWN,0,0);return}
+  let anchor,x=0,a=null,b=null;
+  if(pf.husb){const R=parentRegion(pf.husb);a=placeParent(pf.husb,0,'L');x=R.w+GX}
+  if(pf.wife){b=placeParent(pf.wife,x,'R')}
+  anchor=a&&b?bracket(a,b,0):{x:(a||b).cx,y:(a||b).bot};
+  const sibs=pf.chil.length?pf.chil:[focus];
+  const ws=sibs.map(s=>measureDesc(s,0,s===focus?DOWN:0));const tw=ws.reduce((s,w)=>s+w,0)+(sibs.length-1)*GX;
+  let cx=anchor.x-tw/2;const kids=[];
+  sibs.forEach((s,i)=>{kids.push(placeDesc(s,0,s===focus?DOWN:0,cx,0));cx+=ws[i]+GX});
+  drop(anchor,kids);
+}
+
+// ---------- render ----------
+const stage=document.getElementById('stage'),svg=document.getElementById('lines'),sizer=document.getElementById('sizer'),scroller=document.getElementById('scroller');
+let focusId=null,selId=null,scale=1,dims={w:0,h:0},fbox=null;
+const PAD=60;
+function render(keepView){
+  layout(focusId);
+  const minX=Math.min(...boxes.map(b=>b.x)),minY=Math.min(...boxes.map(b=>b.y));
+  const maxX=Math.max(...boxes.map(b=>b.x+W)),maxY=Math.max(...boxes.map(b=>b.y+H));
+  const ox=PAD-minX,oy=PAD-minY;dims={w:maxX-minX+PAD*2,h:maxY-minY+PAD*2};
+  stage.querySelectorAll('.person,.more').forEach(e=>e.remove());
+  svg.setAttribute('width',dims.w);svg.setAttribute('height',dims.h);
+  svg.innerHTML=`<g transform="translate(${ox} ${oy})">`+paths.map(d=>`<path d="${d}"/>`).join('')+'</g>';
+  const shown=new Set(boxes.map(b=>b.pid));const frag=document.createDocumentFragment();fbox=null;
+  boxes.forEach(b=>{const p=P[b.pid];const el=document.createElement('button');el.type='button';
+    el.className='person '+(p.sex==='M'||p.sex==='F'?p.sex:'U')+(isDead(p)?' dec':'')+(b.pid===focusId?' focus':'')+(b.pid===selId?' sel':'');
+    el.style.cssText=`left:${b.x+ox}px;top:${b.y+oy}px;width:${W}px;height:${H}px`;el.dataset.id=b.pid;
+    const pic=profileOf(b.pid);el.innerHTML=`<span class="ph">${pic?`<img src="${esc(pic.url)}" alt="" loading="lazy">`:SIL}</span><span class="tx"><span class="nm"></span><span class="yr"></span></span>`;
+    el.querySelector('.nm').textContent=niceName(p.name);el.querySelector('.yr').textContent=years(p);
+    const nf=mediaOf(b.pid).length;if(nf){const c=document.createElement('span');c.className='clip';c.innerHTML=CLIP+nf;c.title=nf+' attached file'+(nf>1?'s':'');el.appendChild(c)}
+    frag.appendChild(el);if(b.pid===focusId&&!fbox)fbox={x:b.x+ox,y:b.y+oy};
+    const pf=parentsOf(b.pid);const hidUp=pf&&![pf.husb,pf.wife].some(x=>x&&shown.has(x));
+    const kids=famsOf(b.pid).flatMap(f=>f.chil);const hidDn=kids.length&&!kids.some(c=>shown.has(c));
+    if(hidUp){const m=document.createElement('span');m.className='more';m.textContent="▲ more";m.style.cssText=`left:${b.x+ox+W/2-24}px;top:${b.y+oy-18}px`;frag.appendChild(m)}
+    if(hidDn){const m=document.createElement('span');m.className='more';m.textContent='▼ '+kids.length;m.style.cssText=`left:${b.x+ox+W/2-16}px;top:${b.y+oy+H+3}px`;frag.appendChild(m)}
+  });
+  stage.appendChild(frag);applyScale();
+  if(!keepView&&fbox)centerOn(fbox);
+}
+function applyScale(){stage.style.transform=`scale(${scale})`;sizer.style.width=dims.w*scale+'px';sizer.style.height=dims.h*scale+'px'}
+function centerOn(b){scroller.scrollLeft=(b.x+W/2)*scale-scroller.clientWidth/2;scroller.scrollTop=(b.y+H/2)*scale-scroller.clientHeight/2}
+function zoomTo(s,cx,cy){s=Math.max(.3,Math.min(2,s));if(cx==null){cx=scroller.clientWidth/2;cy=scroller.clientHeight/2}
+  const wx=(scroller.scrollLeft+cx)/scale,wy=(scroller.scrollTop+cy)/scale;scale=s;applyScale();scroller.scrollLeft=wx*scale-cx;scroller.scrollTop=wy*scale-cy;
+  try{localStorage.setItem('ft-zoom',String(scale))}catch(e){}}
+
+// ---------- person sheet ----------
+const sheet=document.getElementById('sheet');
+function chip(id){const p=P[id];return p?`<button type="button" data-go="${id}">${esc(niceName(p.name))}</button>`:''}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function evRow(label,e){if(!e||(!e.date&&!e.place))return'';return`<dt>${label}</dt><dd>${esc(fmtDate(e.date||''))}${e.date&&e.place?'<br>':''}<span style="color:var(--muted)">${esc(e.place||'')}</span></dd>`}
+function openSheet(id){selId=id;const p=P[id];
+  document.querySelectorAll('.person.sel').forEach(e=>e.classList.remove('sel'));document.querySelectorAll(`.person[data-id="${CSS.escape(id)}"]`).forEach(e=>e.classList.add('sel'));
+  const pf=parentsOf(id),par=pf?[pf.husb,pf.wife].filter(Boolean):[];
+  const sibs=pf?pf.chil.filter(c=>c!==id):[];
+  const fams=famsOf(id);const sps=fams.map(f=>spouseIn(f,id)).filter(Boolean);const kids=fams.flatMap(f=>f.chil);
+  const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(niceName(P[spouseIn(f,id)].name))+')':''}`:'').filter(Boolean);
+  sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
+   ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2><div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
+   <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
+   ${canEdit()?`<button class="btn" type="button" data-edit="${id}">Edit</button>
+   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}</div>
+   <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}
+   ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
+   ${par.length?`<dt>Parents</dt><dd class="rel">${par.map(chip).join('')}</dd>`:''}
+   ${sps.length?`<dt>Spouse</dt><dd class="rel">${sps.map(chip).join('')}</dd>`:''}
+   ${sibs.length?`<dt>Siblings</dt><dd class="rel">${sibs.map(chip).join('')}</dd>`:''}
+   ${kids.length?`<dt>Children</dt><dd class="rel">${kids.map(chip).join('')}</dd>`:''}</dl>
+   ${p.notes.map(n=>`<div class="note">${esc(n)}</div>`).join('')}
+   ${filesSection(id)}`;
+  sheet.hidden=false;sheet.scrollTop=0}
+sheet.addEventListener('click',e=>{const t=e.target.closest('button,img[data-media]');if(!t)return;
+  if(t.dataset.close!=null){sheet.hidden=true;selId=null;document.querySelectorAll('.person.sel').forEach(e=>e.classList.remove('sel'));return}
+  if(t.dataset.focus){setFocus(t.dataset.focus);return}
+  if(t.dataset.edit){openForm({mode:'edit',id:t.dataset.edit});return}
+  if(t.dataset.back){openSheet(t.dataset.back);return}
+  if(t.dataset.del){if(t.dataset.armed){deletePerson(t.dataset.del)}else{t.dataset.armed='1';t.textContent='Tap again to delete'}return}
+  if(t.dataset.media){openLb(t.dataset.media);return}
+  if(t.dataset.attach){pickFor=t.dataset.attach;pickProfile=false;const fp=document.getElementById('filepick');fp.accept='image/*,application/pdf';fp.multiple=true;fp.click();return}
+  if(t.dataset.profpick){pickFor=t.dataset.profpick;pickProfile=true;const fp=document.getElementById('filepick');fp.accept='image/*';fp.multiple=false;fp.click();return}
+  if(t.dataset.go){const id=t.dataset.go;const el=document.querySelector(`.person[data-id="${CSS.escape(id)}"]`);if(el){openSheet(id);centerOn({x:parseFloat(el.style.left),y:parseFloat(el.style.top)})}else{setFocus(id)}}});
+sheet.addEventListener('change',e=>{const s=e.target.closest('select[data-add]');if(s&&s.value)openForm({mode:'add',rel:s.value,anchor:s.dataset.add})});
+
+// ---------- editing (saved to the page's shared database) ----------
+let db=null;
+const canEdit=()=>!!db&&!db.readOnly;
+const keyOf=id=>id.replace(/[:@]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return m?{given:m[1].trim(),surname:m[2].trim(),suffix:m[3].trim()}:{given:(n||'').trim(),surname:'',suffix:''}}
+function status(msg,err){const s=document.getElementById('savestate');if(s){s.textContent=msg;s.style.color=err?'#c0392b':''}}
+function openForm(o){
+  const p=o.mode==='edit'?P[o.id]:null;const a=o.anchor?P[o.anchor]:null;
+  const nm=splitName(p?p.name:(a&&(o.rel==='child'||o.rel==='sibling')?'/'+splitName(a.name).surname+'/':''));
+  const sex=p?p.sex:o.rel==='father'?'M':o.rel==='mother'?'F':o.rel==='spouse'&&a?(a.sex==='M'?'F':a.sex==='F'?'M':'U'):'U';
+  const b=p?(p.ev.BIRT||{}):{},d=p?(p.ev.DEAT||{}):{};
+  let famPick='';
+  if(o.mode==='add'&&o.rel==='child'){const fs=famsOf(o.anchor);
+    famPick=`<label>With<select id="ed-fam">${fs.map(f=>{const s=spouseIn(f,o.anchor);return`<option value="${f.id}">${s?esc(niceName(P[s].name)):'Unknown partner'}</option>`}).join('')}<option value="new">Unknown / other partner</option></select></label>`}
+  if(o.mode==='add'&&(o.rel==='father'||o.rel==='mother')){const pf=parentsOf(o.anchor);if(pf&&pf[o.rel==='father'?'husb':'wife']){status('');sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>Already has a ${o.rel}</h2><p class="sub">Edit the existing ${o.rel} instead.</p><button class="btn" type="button" data-back="${o.anchor}">Back</button>`;return}}
+  const title=o.mode==='edit'?'Edit '+esc(niceName(p.name)):'Add '+({father:'father',mother:'mother',spouse:'spouse',child:'child',sibling:'brother or sister'}[o.rel])+' of '+esc(niceName(a.name));
+  sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>${title}</h2>
+  <form id="edform" class="form">
+   <div class="two"><label>Given names<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"></label><label>Surname<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"></label></div>
+   <div class="two"><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr." autocomplete="off"></label>
+   <label>Sex<select id="ed-sex"><option value="M"${sex==='M'?' selected':''}>Male</option><option value="F"${sex==='F'?' selected':''}>Female</option><option value="U"${sex==='U'?' selected':''}>Unknown</option></select></label></div>
+   ${famPick}
+   <div class="two"><label>Birth date<input id="ed-bdate" value="${esc(b.date||'')}" placeholder="3 APR 1949, ABT 1913"></label><label>Birth place<input id="ed-bplace" value="${esc(b.place||'')}"></label></div>
+   <div class="two"><label>Death date<input id="ed-ddate" value="${esc(d.date||'')}" placeholder="21 MAY 2014"></label><label>Death place<input id="ed-dplace" value="${esc(d.place||'')}"></label></div>
+   <label>Notes<textarea id="ed-note" rows="4">${esc(p?p.notes.join('\n\n'):'')}</textarea></label>
+   <div class="acts"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-back="${o.mode==='edit'?o.id:o.anchor}">Cancel</button>
+   ${o.mode==='edit'?`<button class="btn danger" type="button" data-del="${o.id}">Delete person</button>`:''}</div>
+   <p class="hint">Dates use GEDCOM style: 3 APR 1949, ABT 1913, BEF 1900.</p>
+  </form>`;
+  sheet.hidden=false;sheet.scrollTop=0;
+  document.getElementById('edform').onsubmit=ev=>{ev.preventDefault();submitForm(o)};
+}
+function readForm(){const v=i=>document.getElementById(i).value.trim();
+  const g=v('ed-given'),s=v('ed-surname'),x=v('ed-suffix');
+  return{name:`${g} /${s}/${x?' '+x:''}`.trim(),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
+function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
+const writes=[];
+function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
+async function flush(){status('Saving…');try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
+  while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
+  catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
+function submitForm(o){const data=readForm();if(!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
+  let pid=o.id;
+  if(o.mode==='edit'){queue('people',pid,data)}
+  else{pid='N:@I'+uid()+'@';queue('people',pid,data);const a=o.anchor,as=P[a].sex;
+    const newFam=()=>({id:'N:@F'+uid()+'@',husb:null,wife:null,chil:[],ev:{}});
+    if(o.rel==='father'||o.rel==='mother'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f[o.rel==='father'?'husb':'wife']=pid;queue('families',f.id,famData(f))}
+    else if(o.rel==='spouse'){const f=newFam();const meHusb=as==='M'||(as!=='F'&&data.sex!=='M');f.husb=meHusb?a:pid;f.wife=meHusb?pid:a;queue('families',f.id,famData(f))}
+    else if(o.rel==='child'){const sel=document.getElementById('ed-fam').value;let f=sel!=='new'&&F[sel]?JSON.parse(JSON.stringify(F[sel])):Object.assign(newFam(),as==='F'?{wife:a}:{husb:a});f.chil.push(pid);queue('families',f.id,famData(f))}
+    else if(o.rel==='sibling'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f.chil.push(pid);queue('families',f.id,famData(f))}
+  }
+  rebuild();render(true);openSheet(pid);flush()}
+function deletePerson(id){queue('people',id,Object.assign({},OV_P[id]||{},{deleted:true}));
+  const next=parentsOf(id)?(parentsOf(id).husb||parentsOf(id).wife):(famsOf(id).map(f=>spouseIn(f,id)).find(Boolean)||HOME.id);
+  rebuild();if(id===focusId)focusId=next&&P[next]?next:HOME.id;render(false);openSheet(focusId);flush()}
+
+// ---------- documents & photos ----------
+const MEDIA={};let assets=null,pickFor=null;
+const mediaOf=pid=>Object.values(MEDIA).filter(m=>m.person===pid).sort((a,b)=>(a.addedAt||'').localeCompare(b.addedAt||''));
+const isImg=m=>/^image\//.test(m.contentType||'');
+const profileOf=pid=>mediaOf(pid).find(m=>m.profile&&isImg(m))||null;
+let pickProfile=false;
+function filesSection(id){const ms=mediaOf(id);if(!ms.length&&!assets)return'';
+  return`<div class="files"><h3>Documents and photos${ms.length?' ('+ms.length+')':''}</h3>
+  ${ms.length?`<div class="thumbs">${ms.map(m=>`<button type="button" class="thumb" data-media="${esc(m.key)}">${isImg(m)?`<img src="${esc(m.url)}" alt="" loading="lazy">`:`<span class="doc">${esc(((m.name||'').split('.').pop()||'FILE').toUpperCase().slice(0,4))}</span>`}<span class="cap">${esc(m.caption||m.name||'File')}</span></button>`).join('')}</div>`:''}
+  ${assets&&canEdit()?`<div class="acts"><button class="btn" type="button" data-attach="${id}">Attach photo or document</button><button class="btn" type="button" data-profpick="${id}">${profileOf(id)?'Change profile photo':'Add profile photo'}</button></div><p class="hint" id="upmsg">Photos, scans and PDFs up to 20 MB.</p>`:''}</div>`}
+async function shrink(file){ // keep phone photos small enough to load fast; documents stay readable at 2400px
+  if(!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)||file.size<2.5e6)return file;
+  try{const bmp=await createImageBitmap(file);const k=Math.min(1,2400/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));return b||file}catch(e){return file}}
+document.getElementById('filepick').addEventListener('change',async e=>{const files=[...e.target.files];e.target.value='';const pid=pickFor;if(!files.length||!pid||!assets||!db)return;
+  const msg=t=>{const m=document.getElementById('upmsg');if(m)m.textContent=t};let done=0;
+  for(const f of files){msg(`Uploading ${done+1} of ${files.length}…`);status('Uploading…');
+    try{const blob=await shrink(f);const r=await assets.upload(blob);const key='M-'+r.id;
+      const doc={id:key,key,asset:r.id,url:r.url,contentType:r.contentType,name:f.name,caption:pickProfile?'Profile photo':f.name.replace(/\.[^.]+$/,''),person:pid,addedAt:new Date().toISOString()};
+      if(pickProfile&&/^image\//.test(r.contentType||'')){doc.profile=true;for(const x of mediaOf(pid))if(x.profile){x.profile=false;await db.collection('media').doc(x.key).set(x)}}
+      MEDIA[key]=doc;await db.collection('media').doc(key).set(doc);done++}
+    catch(err){const c=err&&err.code;msg(c==='unsupported_type'?`${f.name}: this file type can't be attached. Use a photo, scan or PDF.`:c==='too_large'?`${f.name} is over 20 MB.`:c==='quota_or_state'?'Storage is full.':`${f.name} didn't upload (${c||'error'}).`);status('Upload failed',true)}}
+  if(done){status('Saved');render(true);if(selId===pid&&!document.getElementById('edform'))openSheet(pid)}});
+const lb=document.getElementById('lb');
+function openLb(key){const m=MEDIA[key];if(!m)return;const p=P[m.person];
+  lb.innerHTML=`<div class="bar"><strong>${esc(p?niceName(p.name):'')}</strong><span style="flex:1"></span><button class="btn" type="button" data-lbclose>Close</button></div>
+   <div class="view">${isImg(m)?`<img src="${esc(m.url)}" alt="${esc(m.caption||'')}">`:`<p>${esc(m.name||'Document')}</p>`}</div>
+   <div class="bar"><input id="lb-cap" value="${esc(m.caption||'')}" aria-label="Caption" ${canEdit()?'':'readonly'}>
+   ${canEdit()?'<button class="btn" type="button" data-lbsave>Save caption</button>':''}
+   <a class="btn" href="${esc(m.url)}" target="_blank" rel="noopener">Open original</a>
+   ${canEdit()&&isImg(m)?`<button class="btn" type="button" data-lbprof>${m.profile?'Profile photo ✓':'Use as profile photo'}</button>`:''}
+   ${canEdit()?'<button class="btn danger" type="button" data-lbdel>Remove</button>':''}</div>`;
+  lb.dataset.key=key;lb.hidden=false}
+lb.addEventListener('click',async e=>{const t=e.target.closest('button');if(!t)return;const key=lb.dataset.key,m=MEDIA[key];
+  if(t.dataset.lbclose!=null){lb.hidden=true;return}
+  if(t.dataset.lbprof!=null&&m){const on=!m.profile;t.disabled=true;
+    try{for(const x of mediaOf(m.person)){const want=x.key===key?on:false;if(!!x.profile!==want){x.profile=want;await db.collection('media').doc(x.key).set(x)}}
+      t.textContent=on?'Profile photo ✓':'Use as profile photo';render(true);if(selId)openSheet(selId)}catch(err){t.textContent='Not saved'}t.disabled=false;return}
+  if(t.dataset.lbsave!=null&&m){m.caption=document.getElementById('lb-cap').value.trim();t.textContent='Saving…';
+    try{await db.collection('media').doc(key).set(m);t.textContent='Saved'}catch(err){t.textContent='Not saved'}return}
+  if(t.dataset.lbdel!=null&&m){if(!t.dataset.armed){t.dataset.armed='1';t.textContent='Tap again to remove';return}
+    try{await db.collection('media').doc(key).delete();delete MEDIA[key];if(assets&&m.asset)assets.delete(m.asset).catch(()=>{});lb.hidden=true;render(true);if(selId)openSheet(selId)}catch(err){t.textContent='Could not remove'}}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
+
+// ---------- export ----------
+function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
+  const L=['0 HEAD','1 SOUR SantosFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
+  const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place)};
+  Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'),'1 SEX '+(p.sex||'U'));['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
+    p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
+    mediaOf(p.id).forEach(m=>{L.push('1 OBJE','2 FILE '+new URL(m.url,location.href).href);if(m.caption)L.push('2 TITL '+m.caption)});
+    p.famc.forEach(f=>fm[f]&&L.push('1 FAMC '+fm[f]));p.fams.forEach(f=>fm[f]&&L.push('1 FAMS '+fm[f]))});
+  Object.values(F).forEach(f=>{L.push(`0 ${fm[f.id]} FAM`);if(f.husb)L.push('1 HUSB '+im[f.husb]);if(f.wife)L.push('1 WIFE '+im[f.wife]);f.chil.forEach(c=>L.push('1 CHIL '+im[c]));ev('MARR',f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?f.ev.MARR:null)});
+  L.push('0 TRLR');return L.join('\n')+'\n'}
+let downloads=null;
+function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>GEDCOM</h2>
+  <h3 class="sect">Export</h3>
+  <p class="sub">${Object.keys(P).length} people and ${Object.keys(F).length} families, including edits made here.</p>
+  <div class="acts">${downloads?'<button class="btn primary" type="button" id="ex-save">Save .ged file</button>':''}<button class="btn" type="button" id="ex-copy">Copy GEDCOM text</button></div>
+  <p class="hint" id="ex-msg"></p><textarea id="ex-text" rows="6" readonly hidden></textarea>
+  ${canEdit()?`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
+  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>`:''}`;sheet.hidden=false;
+  const ip=document.getElementById('im-pick');if(ip)ip.onclick=()=>document.getElementById('gedpick').click();
+  const msg=t=>document.getElementById('ex-msg').textContent=t;
+  const sv=document.getElementById('ex-save');if(sv)sv.onclick=async()=>{const g=toGed();
+    try{await downloads.save({filename:'santos-family-tree.ged',data:g});msg('Saved.')}
+    catch(e){if(e&&e.code==='rejected_extension'){try{await downloads.save({filename:'santos-family-tree.ged.txt',data:g});msg('Saved as .ged.txt. Remove the .txt ending before importing.')}catch(e2){msg(e2&&e2.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}}
+      else msg(e&&e.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}};
+  document.getElementById('ex-copy').onclick=()=>{const g=toGed(),ta=document.getElementById('ex-text');ta.value=g;
+    navigator.clipboard.writeText(g).then(()=>msg('Copied. Paste into a text file named .ged.')).catch(()=>{ta.hidden=false;ta.select();msg('Select all and copy the text below.')})}}
+document.getElementById('export').onclick=openExport;
+
+// ---------- import ----------
+const nrm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const by=p=>((birthOf(p).date||'').match(/\d{4}/)||[''])[0];
+function planImport(text){
+  const IP={},IF={};parseGed(text,'X:','import',IP,IF);
+  const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p)});
+  const map={},newP=[],fill=[];let matched=0;
+  Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
+    if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
+    else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
+    const b=ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{},d=ip.ev.DEAT||ip.ev.BURI||{};
+    if(m){matched++;map[ip.id]=m.id;const mb=birthOf(m),md=deathOf(m);
+      const o={name:m.name,sex:m.sex!=='U'?m.sex:ip.sex,birthDate:mb.date||b.date||'',birthPlace:mb.place||b.place||'',deathDate:md.date||d.date||'',deathPlace:md.place||d.place||'',note:m.notes.join('\n\n')||ip.notes.join('\n\n')};
+      const before=[m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',m.notes.join('\n\n')].join('|'),after=[o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
+      if(before!==after)fill.push([m.id,o])}
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
+  const famW=[];let famNew=0,famUpd=0;
+  Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
+    let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
+    else if(h||w)ex=Object.values(F).find(x=>(x.husb===(h||null)||x.wife===(w||null))&&(h?x.husb===h:x.wife===w)&&kids.some(k=>x.chil.includes(k)));
+    const marr=f.ev.MARR||{};
+    if(ex){const add=kids.filter(k=>!ex.chil.includes(k));const em=ex.ev.MARR||{};const needM=(!em.date&&marr.date)||(!em.place&&marr.place);
+      if(add.length||needM){const c=JSON.parse(JSON.stringify(ex));c.chil=c.chil.concat(add);if(needM)c.ev.MARR={date:em.date||marr.date||'',place:em.place||marr.place||''};famW.push(c);famUpd++}}
+    else{famW.push({id:'N:@F'+uid()+'@',husb:h||null,wife:w||null,chil:kids,ev:(marr.date||marr.place)?{MARR:{date:marr.date||'',place:marr.place||''}}:{}});famNew++}});
+  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched}}
+document.getElementById('gedpick').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const box=document.getElementById('im-plan');if(!box)return;
+  let plan;try{plan=planImport(await f.text())}catch(err){box.innerHTML='<p class="hint">That file could not be read as GEDCOM.</p>';return}
+  if(!plan.total){box.innerHTML='<p class="hint">No people found in that file.</p>';return}
+  box.innerHTML=`<p class="sub"><strong>${esc(f.name)}</strong>: ${plan.total} people. ${plan.newP.length} new, ${plan.matched} already in the tree${plan.fill.length?` (${plan.fill.length} get missing details filled)`:''}. ${plan.famNew} new families, ${plan.famUpd} updated.</p>
+   <div class="acts"><button class="btn primary" type="button" id="im-go">Import</button><button class="btn" type="button" id="im-cancel">Cancel</button></div>`;
+  document.getElementById('im-cancel').onclick=()=>box.innerHTML='';
+  document.getElementById('im-go').onclick=async()=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
+    rebuild();render(true);box.innerHTML='<p class="sub">Importing…</p>';await flush();box.innerHTML=`<p class="sub">Imported ${plan.newP.length} new people. Use Find to look them up.</p>`}});
+
+stage.addEventListener('click',e=>{const el=e.target.closest('.person');if(el)openSheet(el.dataset.id)});
+stage.addEventListener('dblclick',e=>{const el=e.target.closest('.person');if(el)setFocus(el.dataset.id)});
+
+// ---------- focus / hash ----------
+const toHash=id=>id.replace(/[:@]/g,'').replace(/^([A-Z])(I)/,'$1-$2');
+const fromHash=h=>{const m=h.match(/^([A-Za-z])-?(I\d+)$/);return m?`${m[1].toUpperCase()}:@${m[2]}@`:null};
+function setFocus(id,fromNav){if(!P[id])return;focusId=id;render(false);openSheet(id);if(!fromNav){try{history.replaceState(null,'','#'+toHash(id))}catch(e){location.hash=toHash(id)}}}
+const HOME=(DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase()))||Object.values(P)[0];
+addEventListener('hashchange',()=>{const id=fromHash(location.hash.slice(1));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
+
+// ---------- controls ----------
+try{UP=+(localStorage.getItem('ft-up')||3);DOWN=+(localStorage.getItem('ft-down')||2);scale=+(localStorage.getItem('ft-zoom')||(innerWidth<600?.75:1))}catch(e){scale=innerWidth<600?.75:1}
+const upSel=document.getElementById('up'),dnSel=document.getElementById('down');upSel.value=String(UP);dnSel.value=String(DOWN);
+if(upSel.value!==String(UP)){UP=3;upSel.value='3'}if(dnSel.value!==String(DOWN)){DOWN=2;dnSel.value='2'}
+upSel.onchange=()=>{UP=+upSel.value;try{localStorage.setItem('ft-up',UP)}catch(e){}render(false)};
+dnSel.onchange=()=>{DOWN=+dnSel.value;try{localStorage.setItem('ft-down',DOWN)}catch(e){}render(false)};
+document.getElementById('home').onclick=()=>HOME&&setFocus(HOME.id);
+document.getElementById('zin').onclick=()=>zoomTo(scale*1.2);
+document.getElementById('zout').onclick=()=>zoomTo(scale/1.2);
+scroller.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();const r=scroller.getBoundingClientRect();zoomTo(scale*Math.exp(-e.deltaY/300),e.clientX-r.left,e.clientY-r.top)}},{passive:false});
+let pinch=null;
+scroller.addEventListener('touchstart',e=>{if(e.touches.length===2){const[a,b]=e.touches;pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),s:scale}}},{passive:true});
+scroller.addEventListener('touchmove',e=>{if(pinch&&e.touches.length===2){e.preventDefault();const[a,b]=e.touches;const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);const r=scroller.getBoundingClientRect();
+  zoomTo(pinch.s*d/pinch.d,(a.clientX+b.clientX)/2-r.left,(a.clientY+b.clientY)/2-r.top)}},{passive:false});
+scroller.addEventListener('touchend',e=>{if(e.touches.length<2)pinch=null});
+// drag to pan with mouse
+let drag=null;
+scroller.addEventListener('mousedown',e=>{if(e.target.closest('.person'))return;drag={x:e.clientX,y:e.clientY,l:scroller.scrollLeft,t:scroller.scrollTop};scroller.style.cursor='grabbing'});
+addEventListener('mousemove',e=>{if(drag){scroller.scrollLeft=drag.l-(e.clientX-drag.x);scroller.scrollTop=drag.t-(e.clientY-drag.y)}});
+addEventListener('mouseup',()=>{drag=null;scroller.style.cursor=''});
+
+// search
+const q=document.getElementById('q'),res=document.getElementById('results');
+const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
+q.addEventListener('input',()=>{const t=norm(q.value.trim());if(!t){res.hidden=true;return}
+  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
+  res.innerHTML=hits.length?hits.map(x=>`<button type="button" data-id="${x.p.id}">${esc(niceName(x.p.name))} <small>${years(x.p)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';res.hidden=false});
+res.addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;res.hidden=true;q.value='';q.blur();setFocus(b.dataset.id)});
+document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden=true});
+
+// connect the shared edits store and file saving when the viewer offers them
+(async()=>{const c=window.claude;if(!c||!c.use)return;
+  const[d,dl,as]=await Promise.all([c.use('db').catch(()=>null),c.use('downloads').catch(()=>null),c.use('assets').catch(()=>null)]);downloads=dl;assets=as;
+  if(!d){status('View only');return}db=d;let got=0;
+  const timer=setTimeout(()=>{if(got<2)status('Edits not loaded yet',true)},10000);
+  const apply=(coll,target)=>db.collection(coll).onSnapshot(snap=>{got++;if(got>=2)clearTimeout(timer);
+    for(const k in target)delete target[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.id)target[v.id]=v});
+    rebuild();if(!P[focusId])focusId=HOME.id;render(true);
+    if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},e=>status('Edits unavailable: '+(e&&e.code||''),true));
+  apply('people',OV_P);apply('families',OV_F);
+  db.collection('media').onSnapshot(snap=>{for(const k in MEDIA)delete MEDIA[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.key)MEDIA[v.key]=v});
+    render(true);if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},()=>{});
+  if(!sheet.hidden&&selId&&!document.getElementById('edform'))openSheet(selId)})();
+
+const start=fromHash(location.hash.slice(1));
+if(start&&P[start])setFocus(start,true);else if(HOME)setFocus(HOME.id);
+if(innerWidth<760)sheet.hidden=true;
+})();
+</script>
+
+<div id="auth"><div class="card" id="authcard"><h1>Santos Family Tree</h1><p class="lede">Loading…</p></div></div>
+<div id="members" hidden></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+const CFG=window.SITE_CONFIG||{url:'',key:''};
+if(!CFG.url||!CFG.key||/PASTE/.test(CFG.key)){document.getElementById('authcard').innerHTML='<h1>Santos Family Tree</h1><p class="lede">This site is almost ready. The admin still needs to add the Supabase publishable key to config.js.</p>';return}
+const sb=supabase.createClient(CFG.url,CFG.key);
+let me=null,role=null,myName='',booted=false;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const here=location.origin+location.pathname;
+
+// ---------- sign-in screens ----------
+function screen(kind,note){
+  const a=$('#auth'),c=$('#authcard');a.hidden=false;
+  const msg=`<p class="msg${note&&note.err?' err':''}" id="amsg">${esc(note?note.text:'')}</p>`;
+  if(kind==='signin')c.innerHTML=`<h1>Santos Family Tree</h1><p class="lede">Sign in to see and add to the family tree.</p>
+    <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
+    <label>Password<input id="a-pass" type="password" autocomplete="current-password" required minlength="6"></label>
+    <button class="go" type="submit">Sign in</button>${msg}</form>
+    <div class="links"><button type="button" data-s="signup">Create an account</button><button type="button" data-s="forgot">Forgot password?</button></div>`;
+  else if(kind==='signup')c.innerHTML=`<h1>Join the family tree</h1><p class="lede">After you sign up, an admin approves your account.</p>
+    <form id="af"><label>Your name<input id="a-name" autocomplete="name" required></label>
+    <label>Email<input id="a-email" type="email" autocomplete="email" required></label>
+    <label>Password<input id="a-pass" type="password" autocomplete="new-password" required minlength="8"></label>
+    <button class="go" type="submit">Create account</button>${msg}</form>
+    <div class="links"><button type="button" data-s="signin">I already have an account</button></div>`;
+  else if(kind==='forgot')c.innerHTML=`<h1>Reset password</h1><p class="lede">We'll email you a link to set a new password.</p>
+    <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
+    <button class="go" type="submit">Send reset link</button>${msg}</form>
+    <div class="links"><button type="button" data-s="signin">Back to sign in</button></div>`;
+  else if(kind==='newpass')c.innerHTML=`<h1>Set a new password</h1><p class="lede"></p>
+    <form id="af"><label>New password<input id="a-pass" type="password" autocomplete="new-password" required minlength="8"></label>
+    <button class="go" type="submit">Save password</button>${msg}</form>`;
+  else if(kind==='blocked')c.innerHTML=`<h1>Access turned off</h1><p class="lede">An admin has turned off your access to the family tree. Contact them if you think this is a mistake.</p>${msg}
+    <div class="links"><span></span><button type="button" data-s="signout">Sign out</button></div>`;
+  else if(kind==='pending')c.innerHTML=`<h1>Almost there${myName?', '+esc(myName.split(' ')[0]):''}</h1>
+    <p class="lede">Your account is waiting for approval. You can see the tree as soon as an admin approves it.</p>${msg}
+    <div class="links"><button type="button" data-s="recheck">Check again</button><button type="button" data-s="signout">Sign out</button></div>`;
+  const f=$('#af');if(f)f.onsubmit=e=>{e.preventDefault();submit(kind)};
+  const first=c.querySelector('input');if(first)first.focus();
+}
+function say(t,err){const m=$('#amsg');if(m){m.textContent=t;m.className='msg'+(err?' err':'')}}
+$('#authcard').addEventListener('click',async e=>{const b=e.target.closest('button[data-s]');if(!b)return;const s=b.dataset.s;
+  if(s==='signout'){await sb.auth.signOut();location.reload();return}
+  if(s==='recheck'){start();return}
+  screen(s)});
+async function submit(kind){const v=id=>{const el=$('#'+id);return el?el.value.trim():''};const btn=$('#af .go');btn.disabled=true;say('Please wait…');
+  try{
+    if(kind==='signin'){const{error}=await sb.auth.signInWithPassword({email:v('a-email'),password:$('#a-pass').value});if(error)throw error;await start()}
+    else if(kind==='signup'){const{data,error}=await sb.auth.signUp({email:v('a-email'),password:$('#a-pass').value,options:{data:{name:v('a-name')},emailRedirectTo:here}});if(error)throw error;
+      if(data.session)await start();else screen('signin',{text:'Check your email to confirm your account, then sign in.'})}
+    else if(kind==='forgot'){const{error}=await sb.auth.resetPasswordForEmail(v('a-email'),{redirectTo:here});if(error)throw error;say('If that email has an account, a reset link is on its way.')}
+    else if(kind==='newpass'){const{error}=await sb.auth.updateUser({password:$('#a-pass').value});if(error)throw error;history.replaceState(null,'',here);await start()}
+  }catch(err){say(friendly(err),true)}finally{if(btn)btn.disabled=false}}
+function friendly(e){const m=(e&&e.message)||'Something went wrong.';
+  if(/invalid login/i.test(m))return'Email or password is wrong.';
+  if(/already registered/i.test(m))return'That email already has an account. Sign in instead.';
+  if(/rate limit/i.test(m))return'Too many emails sent. Try again in an hour.';
+  return m}
+
+// ---------- start ----------
+let recovering=false;
+sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovering=true;screen('newpass')}});
+async function start(){
+  if(recovering)return;
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){screen('signin');return}
+  me=session.user;myName=(me.user_metadata&&me.user_metadata.name)||'';
+  const{data:m,error}=await sb.from('members').select('role,name').eq('user_id',me.id).maybeSingle();
+  if(error){screen('signin',{text:'Could not reach the tree. Check your connection and try again.',err:true});return}
+  role=m&&m.role;if(m&&m.name)myName=m.name;
+  if(role==='blocked'){screen('blocked');return}
+  if(!role||role==='pending'){screen('pending');return}
+  if(booted){$('#auth').hidden=true;return}
+  const{data:rows,error:e2}=await sb.from('research').select('prefix,label,ged,updated_at');
+  if(e2){screen('pending',{text:'Could not load the tree: '+e2.message,err:true});return}
+  const cfgRow=rows.find(r=>r.prefix==='_config');const cfg=cfgRow?JSON.parse(cfgRow.ged):{};
+  const order=cfg.order||[];
+  const sources=rows.filter(r=>r.prefix!=='_config').sort((a,b)=>(order.indexOf(a.prefix)+1||99)-(order.indexOf(b.prefix)+1||99));
+  window.__DATA={sources,links:cfg.links||[],home:cfg.home||'',built:cfg.built||''};
+  boot();
+}
+
+// ---------- capability layer used by the tree page ----------
+const signed={};
+async function signMedia(list){
+  const need=[...new Set(list.filter(v=>v&&v.asset&&!(signed[v.asset]&&signed[v.asset].exp>Date.now()+36e5)).map(v=>v.asset))];
+  if(need.length){const{data}=await sb.storage.from('media').createSignedUrls(need,7*86400);(data||[]).forEach(d=>{if(d.signedUrl)signed[d.path]={url:d.signedUrl,exp:Date.now()+7*864e5}})}
+  list.forEach(v=>{if(v&&v.asset&&signed[v.asset])v.url=signed[v.asset].url})}
+function makeDb(){
+  const cache={},subs={};let chan=null;
+  const emit=c=>{const docs=Object.entries(cache[c]||{}).map(([id,v])=>({id,exists:true,data:()=>v}));(subs[c]||[]).forEach(s=>s.next({docs,size:docs.length,empty:!docs.length}))};
+  async function load(c){const{data,error}=await sb.from('docs').select('id,data').eq('coll',c).limit(20000);if(error)throw error;
+    cache[c]={};data.forEach(r=>cache[c][r.id]=r.data);if(c==='media')await signMedia(Object.values(cache[c]));emit(c)}
+  function chanOn(){if(chan)return;chan=sb.channel('docs-live').on('postgres_changes',{event:'*',schema:'public',table:'docs'},async pl=>{
+    const row=pl.eventType==='DELETE'?pl.old:pl.new;if(!row||!cache[row.coll])return;
+    if(pl.eventType==='DELETE')delete cache[row.coll][row.id];else{cache[row.coll][row.id]=row.data;if(row.coll==='media')await signMedia([row.data])}
+    emit(row.coll)}).subscribe()}
+  const fail=e=>({code:e&&(e.code==='42501'||/row-level security/i.test(e.message||''))?'not_granted':'unavailable',message:(e&&e.message)||'error'});
+  async function bulk(rows){const now=new Date().toISOString();
+    for(let i=0;i<rows.length;i+=400){const part=rows.slice(i,i+400).map(r=>{const data=Object.assign({},r.data);if(r.coll==='media')delete data.url;return{coll:r.coll,id:r.id,data,updated_by:me.id,updated_at:now}});
+      const{error}=await sb.from('docs').upsert(part);if(error)throw fail(error)}
+    rows.forEach(r=>{(cache[r.coll]=cache[r.coll]||{})[r.id]=r.data});[...new Set(rows.map(r=>r.coll))].forEach(emit)}
+  return{readOnly:role==='viewer',bulk,collection:c=>({
+    onSnapshot(next,err){(subs[c]=subs[c]||[]).push({next,err});chanOn();load(c).catch(e=>err&&err(fail(e)));return()=>{}},
+    doc:id=>({
+      async set(v){const data=Object.assign({},v);if(c==='media')delete data.url;
+        const{error}=await sb.from('docs').upsert({coll:c,id,data,updated_by:me.id,updated_at:new Date().toISOString()});if(error)throw fail(error);
+        (cache[c]=cache[c]||{})[id]=v;emit(c)},
+      async delete(){const{error}=await sb.from('docs').delete().eq('coll',c).eq('id',id);if(error)throw fail(error);if(cache[c])delete cache[c][id];emit(c)}})})}
+}
+const assetsApi={
+  async upload(blob){const t=blob.type||'application/octet-stream';const ext=(t.split('/')[1]||'bin').replace('jpeg','jpg').replace(/[^a-z0-9]/g,'').slice(0,5);
+    const path=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2))+'.'+ext;
+    const{error}=await sb.storage.from('media').upload(path,blob,{contentType:t});
+    if(error)throw{code:/exceed|size|large/i.test(error.message)?'too_large':/mime|type/i.test(error.message)?'unsupported_type':'upstream_error',message:error.message};
+    const{data}=await sb.storage.from('media').createSignedUrl(path,7*86400);signed[path]={url:data.signedUrl,exp:Date.now()+7*864e5};
+    return{id:path,url:data.signedUrl,contentType:t,sizeBytes:blob.size}},
+  async delete(path){return{deleted:false}}}; // files are kept so an admin can undo a removal from History
+const downloadsApi={async save({filename,data}){const blob=data instanceof Blob?data:new Blob([data],{type:'text/plain'});const u=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return{status:'saved'}}};
+
+function boot(){
+  booted=true;const db=makeDb();
+  window.claude={use:async n=>n==='db'?db:n==='assets'?(role==='viewer'?null:assetsApi):n==='downloads'?downloadsApi:null};
+  const s=document.createElement('script');s.textContent=document.getElementById('treecode').textContent;document.body.appendChild(s);
+  $('#auth').hidden=true;
+  const tools=document.querySelector('header .tools');
+  const chip=document.createElement('span');chip.className='userchip';chip.textContent=(myName||me.email)+' · '+role;tools.appendChild(chip);
+  if(role==='admin'){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Members';b.onclick=openMembers;tools.appendChild(b);refreshPendingBadge(b);
+    const h=document.createElement('button');h.className='btn';h.type='button';h.textContent='History';h.onclick=openHistory;tools.appendChild(h)}
+  const out=document.createElement('button');out.className='btn';out.type='button';out.textContent='Sign out';out.onclick=async()=>{await sb.auth.signOut();location.reload()};tools.appendChild(out);
+}
+async function refreshPendingBadge(b){const{data}=await sb.from('members').select('user_id').eq('role','pending');const n=(data||[]).length;b.textContent=n?`Members (${n} waiting)`:'Members'}
+
+// ---------- member approval (admins) ----------
+async function openMembers(){
+  const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Members</h1><p class="lede">Loading…</p></div>';
+  const{data,error}=await sb.from('members').select('user_id,email,name,role,created_at').order('created_at');
+  if(error){box.querySelector('.lede').textContent=error.message;return}
+  const roles=[['pending','Waiting'],['viewer','Can view'],['editor','Can view and edit'],['admin','Admin'],['blocked','Blocked']];
+  box.innerHTML=`<div class="card"><h1>Members</h1><p class="lede">Approve relatives by choosing what they can do. Viewers can only look; editors can add and change people and files; admins can also manage members and undo changes. Blocked members can no longer sign in to the tree.</p>
+   ${data.map(m=>`<div class="mrow${m.role==='pending'?' pending':''}"><div class="who"><strong>${esc(m.name||'(no name)')}</strong><small>${esc(m.email)}${m.user_id===me.id?' · you':''}</small></div>
+   <select data-uid="${m.user_id}" aria-label="Access for ${esc(m.name||m.email)}" ${m.user_id===me.id?'disabled':''}>${roles.map(([v,l])=>`<option value="${v}"${v===m.role?' selected':''}>${l}</option>`).join('')}</select></div>`).join('')}
+   <p class="msg" id="mmsg"></p><div class="links"><span></span><button type="button" id="mclose">Close</button></div></div>`;
+  $('#mclose').onclick=()=>{box.hidden=true;const b=[...document.querySelectorAll('header .btn')].find(x=>/^Members/.test(x.textContent));if(b)refreshPendingBadge(b)};
+  box.querySelectorAll('select[data-uid]').forEach(sel=>sel.onchange=async()=>{const{error}=await sb.from('members').update({role:sel.value}).eq('user_id',sel.dataset.uid);
+    $('#mmsg').textContent=error?'Not saved: '+error.message:'Saved.';sel.closest('.mrow').classList.toggle('pending',sel.value==='pending')});
+}
+// ---------- edit history with undo (admins) ----------
+const plainName=n=>(n||'').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknown';
+async function openHistory(){
+  const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>History</h1><p class="lede">Loading…</p></div>';
+  const[{data:hs,error},{data:ms}]=await Promise.all([sb.from('history').select('*').order('at',{ascending:false}).limit(200),sb.from('members').select('user_id,name,email')]);
+  if(error){box.querySelector('.lede').textContent=error.message;return}
+  const who={};(ms||[]).forEach(m=>who[m.user_id]=m.name||m.email);
+  const fmt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  const what=h=>{const d=h.new_data||h.old_data||{};
+    if(h.coll==='people')return plainName(d.name);if(h.coll==='media')return'File: '+(d.caption||d.name||'');if(h.coll==='families')return'Family link';return h.coll};
+  const verb=h=>h.action==='delete'||(h.new_data&&h.new_data.deleted)?'Removed':h.action==='insert'?'Added':'Changed';
+  box.innerHTML=`<div class="card"><h1>History</h1><p class="lede">The latest 200 changes. Undo puts that item back the way it was before the change.</p>
+   ${hs.length?hs.map(h=>`<div class="mrow"><div class="who"><strong>${verb(h)}: ${esc(what(h))}</strong><small>${esc(who[h.user_id]||'Research import')} · ${fmt(h.at)}${h.undone_at?' · undone':''}</small></div>
+    ${h.undone_at?'<span></span>':`<button class="btn" type="button" data-undo="${h.id}">Undo</button>`}</div>`).join(''):'<p class="lede">No changes yet.</p>'}
+   <p class="msg" id="hmsg"></p><div class="links"><span></span><button type="button" id="hclose">Close</button></div></div>`;
+  $('#hclose').onclick=()=>box.hidden=true;
+  box.querySelectorAll('[data-undo]').forEach(b=>b.onclick=async()=>{const h=hs.find(x=>String(x.id)===b.dataset.undo);b.disabled=true;b.textContent='Undoing…';
+    const r=h.old_data==null?await sb.from('docs').delete().eq('coll',h.coll).eq('id',h.doc_id)
+      :await sb.from('docs').upsert({coll:h.coll,id:h.doc_id,data:h.old_data,updated_by:me.id,updated_at:new Date().toISOString()});
+    if(r.error){$('#hmsg').textContent='Could not undo: '+r.error.message;b.disabled=false;b.textContent='Undo';return}
+    await sb.from('history').update({undone_at:new Date().toISOString()}).eq('id',h.id);openHistory()});
+}
+$('#members').addEventListener('click',e=>{if(e.target.id==='members')e.currentTarget.hidden=true});
+
+start();
+})();
+</script>
+</body>
+</html>
