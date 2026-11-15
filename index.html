@@ -650,6 +650,7 @@ if(upSel.value!==String(UP)){UP=3;upSel.value='3'}if(dnSel.value!==String(DOWN))
 upSel.onchange=()=>{UP=+upSel.value;try{localStorage.setItem('ft-up',UP)}catch(e){}render(false)};
 dnSel.onchange=()=>{DOWN=+dnSel.value;try{localStorage.setItem('ft-down',DOWN)}catch(e){}render(false)};
 document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
+if(DATA&&DATA.homeId&&P[DATA.homeId]){const hb=document.getElementById('home');hb.textContent='Me';hb.title='Go back to yourself'}
 document.getElementById('zin').onclick=()=>zoomTo(scale*1.2);
 document.getElementById('zout').onclick=()=>zoomTo(scale/1.2);
 scroller.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();const r=scroller.getBoundingClientRect();zoomTo(scale*Math.exp(-e.deltaY/300),e.clientX-r.left,e.clientY-r.top)}},{passive:false});
@@ -807,7 +808,7 @@ async function start(){
   }
   const order=cfg.order||[];
   sources.sort((a,b)=>(order.indexOf(a.prefix)+1||99)-(order.indexOf(b.prefix)+1||99));
-  window.__DATA={sources,links:cfg.links||DEFAULT_CFG.links,home:cfg.home||DEFAULT_CFG.home,homeId:window.__VIEW&&window.__VIEW.homeId,built:cfg.built||''};
+  window.__DATA={sources,links:cfg.links||DEFAULT_CFG.links,home:cfg.home||DEFAULT_CFG.home,homeId:(window.__VIEW&&window.__VIEW.homeId)||(m&&m.person)||null,built:cfg.built||''};
   if(!sources.length&&role==='admin')setTimeout(()=>openResearch(true),300);
   boot();
 }
