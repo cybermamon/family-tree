@@ -739,7 +739,7 @@ function screen(kind,note){
   const a=$('#auth'),c=$('#authcard');a.hidden=false;
   const msg=`<p class="msg${note&&note.err?' err':''}" id="amsg">${esc(note?note.text:'')}</p>`;
   if(kind==='signin')c.innerHTML=`<h1>Infinite Family Tree</h1><p class="lede">Sign in to see and add to the family tree.</p>
-    <form id="af"><label>Email or username<input id="a-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
     <label>Password<input id="a-pass" type="password" autocomplete="current-password" required minlength="6"></label>
     <button class="go" type="submit">Sign in</button>${msg}</form>
     <div class="links"><button type="button" data-s="signup">Create an account</button><button type="button" data-s="forgot">Forgot password?</button></div>`;
@@ -771,7 +771,7 @@ $('#authcard').addEventListener('click',async e=>{const b=e.target.closest('butt
   screen(s)});
 async function submit(kind){const v=id=>{const el=$('#'+id);return el?el.value.trim():''};const btn=$('#af .go');btn.disabled=true;say('Please wait…');
   try{
-    if(kind==='signin'){const id=v('a-email');const{error}=await sb.auth.signInWithPassword({email:id.includes('@')?id:id.toLowerCase()+'@'+USER_DOMAIN,password:$('#a-pass').value});if(error)throw error;await start()}
+    if(kind==='signin'){const{error}=await sb.auth.signInWithPassword({email:v('a-email'),password:$('#a-pass').value});if(error)throw error;await start()}
     else if(kind==='signup'){const{data,error}=await sb.auth.signUp({email:v('a-email'),password:$('#a-pass').value,options:{data:{name:v('a-name')},emailRedirectTo:here}});if(error)throw error;
       if(data.session)await start();else screen('signin',{text:'Check your email to confirm your account, then sign in.'})}
     else if(kind==='forgot'){const{error}=await sb.auth.resetPasswordForEmail(v('a-email'),{redirectTo:here});if(error)throw error;say('If that email has an account, a reset link is on its way.')}
@@ -785,7 +785,6 @@ function friendly(e){const m=(e&&e.message)||'Something went wrong.';
 
 // ---------- start ----------
 let recovering=false;
-const USER_DOMAIN='family.infinitefate.com'; // accounts made by an admin sign in with a username
 sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovering=true;screen('newpass')}});
 async function start(){
   if(recovering)return;
@@ -886,19 +885,18 @@ async function refreshPendingBadge(b){const{data}=await sb.from('members').selec
 
 // ---------- create an account for someone in the tree (admins) ----------
 function openCreateAccount(pid,name){
-  const box=$('#members');box.hidden=false;const parts=(name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z ]/g,'').split(' ').filter(Boolean);
-  const user=parts.length>1?parts[0]+'.'+parts[parts.length-1]:(parts[0]||'');
+  const box=$('#members');box.hidden=false;
   const pw=Array.from(crypto.getRandomValues(new Uint32Array(3)),n=>n.toString(36)).join('').slice(0,10);
-  box.innerHTML=`<div class="card"><h1>Create account</h1><p class="lede">For <strong>${esc(name)}</strong>. They sign in with this username and temporary password, then must choose their own password.</p>
-   <form id="cf"><label>Username<input id="c-user" value="${esc(user)}" required minlength="3" autocapitalize="none" spellcheck="false"></label>
+  box.innerHTML=`<div class="card"><h1>Create account</h1><p class="lede">For <strong>${esc(name)}</strong>. They sign in with their email and this temporary password, then must choose their own password.</p>
+   <form id="cf"><label>Their email<input id="c-user" type="email" required autocomplete="off"></label>
    <label>Temporary password<input id="c-pass" value="${esc(pw)}" required minlength="8"></label>
    <label>Role<select id="c-role"><option value="viewer">Can view</option><option value="editor">Can view and edit</option><option value="family_admin">Family admin</option><option value="admin">Admin</option></select></label>
    <button class="go" type="submit">Create account</button></form><p class="msg" id="cmsg"></p><div id="cdone"></div>
    <div class="links"><span></span><button type="button" id="cclose">Close</button></div></div>`;
   $('#cclose').onclick=()=>box.hidden=true;
   $('#cf').onsubmit=async e=>{e.preventDefault();const b=$('#cf .go');b.disabled=true;$('#cmsg').textContent='Creating…';
-    try{const r=await treeCall({op:'createUser',username:$('#c-user').value.trim(),password:$('#c-pass').value,role:$('#c-role').value,person:pid,name});
-      const text=`Family tree: ${location.origin}\nUsername: ${r.login}\nTemporary password: ${$('#c-pass').value}\nYou'll choose your own password when you first sign in.`;
+    try{const r=await treeCall({op:'createUser',email:$('#c-user').value.trim(),password:$('#c-pass').value,role:$('#c-role').value,person:pid,name});
+      const text=`Family tree: ${location.origin}\nEmail: ${r.login}\nTemporary password: ${$('#c-pass').value}\nYou'll choose your own password when you first sign in.`;
       $('#cf').hidden=true;$('#cmsg').textContent='Account created. Send them these details:';
       $('#cdone').innerHTML=`<pre class="creds">${esc(text)}</pre><button class="btn" type="button" id="ccopy">Copy</button>`;
       $('#ccopy').onclick=async()=>{try{await navigator.clipboard.writeText(text);$('#ccopy').textContent='Copied'}catch(_){}}}

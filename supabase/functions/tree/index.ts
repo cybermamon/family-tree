@@ -171,7 +171,6 @@ function checkWrites(member, view, current, rows) {
 // Members (except admins) read the tree and save their changes only through this function.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
-const USER_DOMAIN = 'family.infinitefate.com'; // usernames sign in as username@this (no email is sent)
 let SECRET = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 try { const ks = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}'); SECRET = SECRET || ks.default || Object.values(ks)[0] || '' } catch (_) { /* older projects */ }
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -196,17 +195,16 @@ Deno.serve(async (req: Request) => {
 
     if (body.op === 'createUser') { // admins create an account for someone in the tree
       if (member.role !== 'admin') return json({ error: 'Only admins can create accounts.' }, 403);
-      const raw = String(body.username || '').trim().toLowerCase();
-      const email = raw.includes('@') ? raw : raw.replace(/[^a-z0-9._-]/g, '') + '@' + USER_DOMAIN;
-      if (!/^[^@\s]{3,}@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Use at least 3 letters or numbers for the username.' }, 400);
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Enter a valid email address.' }, 400);
       if (String(body.password || '').length < 8) return json({ error: 'The password needs at least 8 characters.' }, 400);
       if (!['viewer', 'editor', 'family_admin', 'admin'].includes(body.role)) return json({ error: 'Pick a role.' }, 400);
       const { data: cu, error: ce } = await sb.auth.admin.createUser({ email, password: body.password, email_confirm: true,
-        user_metadata: { name: body.name || '', username: raw, must_change_password: true } });
-      if (ce || !cu || !cu.user) return json({ error: /already/i.test(ce?.message || '') ? 'That username is already taken.' : (ce?.message || 'Could not create the account.') }, 400);
+        user_metadata: { name: body.name || '', must_change_password: true } });
+      if (ce || !cu || !cu.user) return json({ error: /already/i.test(ce?.message || '') ? 'That email already has an account.' : (ce?.message || 'Could not create the account.') }, 400);
       const { error: me2 } = await sb.from('members').update({ role: body.role, person: body.person || null, name: body.name || '' }).eq('user_id', cu.user.id);
       if (me2) return json({ error: 'Account created, but setting its role failed: ' + me2.message }, 500);
-      return json({ ok: true, login: raw.includes('@') ? email : raw });
+      return json({ ok: true, login: email });
     }
     const [research, rows, members] = await Promise.all([
       all(sb, 'research', 'prefix,label,ged,updated_at'), all(sb, 'docs', 'coll,id,data'),
