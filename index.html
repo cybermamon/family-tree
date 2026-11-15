@@ -93,6 +93,9 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .form input,.form select,.form textarea,#ex-text{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box;min-width:0}
 #sheet h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 0 6px;font-weight:600}
 .exist{position:relative}
+.dup{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.dup small{color:var(--muted)}
+.dup .acts{margin:4px 0 0}
 #ed-chosen{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--fg)}
 .hint{font-size:12px;color:var(--muted);margin:4px 0 0}
 .btn.danger{color:#b3261e;border-color:#b3261e;background:none}
@@ -508,7 +511,10 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
   <div class="acts">${downloads?'<button class="btn primary" type="button" id="ex-save">Save .ged file</button>':''}<button class="btn" type="button" id="ex-copy">Copy GEDCOM text</button></div>
   <p class="hint" id="ex-msg"></p><textarea id="ex-text" rows="6" readonly hidden></textarea>
   ${canEdit()?`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
-  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>`:''}`;sheet.hidden=false;
+  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>
+  <h3 class="sect">Duplicates</h3><p class="sub">Find people who appear twice (same name and birth year) and merge them into one.</p>
+  <div class="acts"><button class="btn" type="button" id="dup-find">Find duplicates</button></div><div id="dup-list"></div>`:''}`;sheet.hidden=false;
+  const df=document.getElementById('dup-find');if(df)df.onclick=showDups;
   const ip=document.getElementById('im-pick');if(ip)ip.onclick=()=>document.getElementById('gedpick').click();
   const msg=t=>document.getElementById('ex-msg').textContent=t;
   const sv=document.getElementById('ex-save');if(sv)sv.onclick=async()=>{const g=toGed();
@@ -518,6 +524,49 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
   document.getElementById('ex-copy').onclick=()=>{const g=toGed(),ta=document.getElementById('ex-text');ta.value=g;
     navigator.clipboard.writeText(g).then(()=>msg('Copied. Paste into a text file named .ged.')).catch(()=>{ta.hidden=false;ta.select();msg('Select all and copy the text below.')})}}
 document.getElementById('export').onclick=openExport;
+
+// ---------- duplicates ----------
+function findDups(){const g={};Object.values(P).forEach(p=>{const k=nrm(niceName(p.name))+'|'+by(p);(g[k]=g[k]||[]).push(p)});
+  const pre=p=>p.id.split(':')[0];
+  const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>nrm(niceName(P[x].name))).sort().join('+'):''};
+  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&!(parNames(x)&&parNames(y)&&parNames(x)!==parNames(y));
+  const out=[];Object.values(g).forEach(a=>{if(a.length<2||nrm(niceName(a[0].name))==='unknown')return;
+    a.sort((x,y)=>(x.id.startsWith('N:')?1:0)-(y.id.startsWith('N:')?1:0));
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j]))out.push([a[i],a[j]])});
+  return out}
+function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
+  const sp=famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean).map(x=>niceName(P[x].name));
+  return [par.length?'child of '+par.join(' & '):'',sp.length?'married to '+sp.join(', '):''].filter(Boolean).join('; ')||'no relatives linked'}
+function showDups(){const box=document.getElementById('dup-list');const ds=findDups();
+  if(!ds.length){box.innerHTML='<p class="sub">No duplicates found.</p>';return}
+  box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge keeps the first one and moves the second one's relatives, details and files onto it. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
+   ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
+    <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button></div></div>`).join('');
+  box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
+    ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
+  const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
+    all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k]&&P[d]){mergeInto(k,d);rebuild()}});render(true);await flush();showDups()};
+  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)})}
+function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
+  // relatives: point every family at the kept person
+  const touched={};
+  Object.values(F).forEach(f=>{if(f.husb!==drop&&f.wife!==drop&&!f.chil.includes(drop))return;const c=JSON.parse(JSON.stringify(f));
+    if(c.husb===drop)c.husb=keep;if(c.wife===drop)c.wife=keep;c.chil=[...new Set(c.chil.map(x=>x===drop?keep:x))];touched[c.id]=c});
+  const all=Object.values(F).map(f=>touched[f.id]||f);
+  // two families with the same couple (or a child listed under two copies of the same parents) become one
+  const seen={};all.forEach(f=>{if(!f.husb||!f.wife)return;const k=f.husb+'+'+f.wife;
+    if(seen[k]){const a=touched[seen[k].id]||(touched[seen[k].id]=JSON.parse(JSON.stringify(seen[k])));a.chil=[...new Set(a.chil.concat(f.chil))];
+      const am=a.ev.MARR||{},fm=f.ev.MARR||{};if(!am.date&&fm.date||!am.place&&fm.place)a.ev.MARR={date:am.date||fm.date||'',place:am.place||fm.place||''};
+      touched[f.id]=Object.assign(JSON.parse(JSON.stringify(f)),{deleted:true})}else seen[k]=touched[f.id]||f});
+  Object.values(touched).forEach(f=>queue('families',f.id,f.deleted?Object.assign(famData(f),{deleted:true}):famData(f)));
+  // details: fill what the kept person is missing
+  const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
+  const o={name:K.name,sex:K.sex!=='U'?K.sex:D.sex,birthDate:kb.date||db_.date||'',birthPlace:kb.place||db_.place||'',deathDate:kd.date||dd.date||'',deathPlace:kd.place||dd.place||'',
+    note:[...new Set(K.notes.concat(D.notes))].join('\n\n')};
+  queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
+  // files follow the person
+  if(db)mediaOf(drop).forEach(m=>{m.person=keep;db.collection('media').doc(m.key).set(m).catch(()=>{})});
+  if(focusId===drop)focusId=keep;if(selId===drop)selId=keep}
 
 // ---------- import ----------
 const nrm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
