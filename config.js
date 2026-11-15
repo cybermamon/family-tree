@@ -3,5 +3,5 @@
 // (signed-in, approved members). Never put the SECRET key here.
 window.SITE_CONFIG = {
   url: "https://xtqfqfuzckpxohfdfhke.supabase.co",
-  key: "PASTE_PUBLISHABLE_KEY_HERE"
+  key: "sb_publishable_jEVoutPhHYbqhiCkqX1thA_f0xVfQjl"
 };
