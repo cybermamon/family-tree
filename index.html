@@ -92,6 +92,8 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
 .form input,.form select,.form textarea,#ex-text{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box;min-width:0}
 #sheet h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 0 6px;font-weight:600}
+.exist{position:relative}
+#ed-chosen{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--fg)}
 .hint{font-size:12px;color:var(--muted);margin:4px 0 0}
 .btn.danger{color:#b3261e;border-color:#b3261e;background:none}
 .files{border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
@@ -389,6 +391,8 @@ function openForm(o){
   const title=o.mode==='edit'?'Edit '+esc(niceName(p.name)):'Add '+({father:'father',mother:'mother',spouse:'spouse',child:'child',sibling:'brother or sister'}[o.rel])+' of '+esc(niceName(a.name));
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>${title}</h2>
   <form id="edform" class="form">
+   ${o.mode==='add'?`<div class="exist"><label>Already in the tree? Pick them here<input id="ed-exist" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-exres" hidden></div></div>
+   <p class="hint" id="ed-chosen" hidden></p><p class="hint" id="ed-or">Or add a new person:</p>`:''}
    <div class="two"><label>Given names<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"></label><label>Surname<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"></label></div>
    <div class="two"><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr." autocomplete="off"></label>
    <label>Sex<select id="ed-sex"><option value="M"${sex==='M'?' selected':''}>Male</option><option value="F"${sex==='F'?' selected':''}>Female</option><option value="U"${sex==='U'?' selected':''}>Unknown</option></select></label></div>
@@ -402,6 +406,16 @@ function openForm(o){
   </form>`;
   sheet.hidden=false;sheet.scrollTop=0;
   document.getElementById('edform').onsubmit=ev=>{ev.preventDefault();submitForm(o)};
+  const ex=document.getElementById('ed-exist');
+  if(ex){const rs=document.getElementById('ed-exres'),form=document.getElementById('edform');
+    const newBits=()=>[...form.querySelectorAll('.two')].concat([document.getElementById('ed-note').closest('label'),document.getElementById('ed-or')]);
+    ex.addEventListener('input',()=>{const t=nrm(ex.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
+      const hits=Object.values(P).filter(p=>p.id!==o.anchor&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-pick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+    rs.addEventListener('click',e=>{const b=e.target.closest('button[data-pick]');if(!b)return;e.stopPropagation();o.existing=b.dataset.pick;rs.hidden=true;ex.closest('.exist').hidden=true;
+      const ch=document.getElementById('ed-chosen');ch.innerHTML=`Linking <strong>${esc(niceName(P[o.existing].name))}</strong> ${years(P[o.existing])} <button class="btn" type="button" id="ed-unpick">Change</button>`;ch.hidden=false;
+      newBits().forEach(x=>x.hidden=true);
+      document.getElementById('ed-unpick').onclick=ev=>{ev.stopPropagation();o.existing=null;ch.hidden=true;ex.closest('.exist').hidden=false;ex.value='';newBits().forEach(x=>x.hidden=false)}})}
 }
 function readForm(){const v=i=>document.getElementById(i).value.trim();
   const g=v('ed-given'),s=v('ed-surname'),x=v('ed-suffix');
@@ -412,13 +426,18 @@ function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.pu
 async function flush(){status('Saving…');try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
   while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
   catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
-function submitForm(o){const data=readForm();if(!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
+function submitForm(o){const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
   let pid=o.id;
   if(o.mode==='edit'){queue('people',pid,data)}
-  else{pid='N:@I'+uid()+'@';queue('people',pid,data);const a=o.anchor,as=P[a].sex;
+  else{const a=o.anchor,as=P[a].sex;
+    if(o.existing){pid=o.existing;
+      const already=(o.rel==='spouse'&&famsOf(a).some(f=>spouseIn(f,a)===pid))||(o.rel==='child'&&famsOf(a).some(f=>f.chil.includes(pid)))||((o.rel==='father'||o.rel==='mother'||o.rel==='sibling')&&parentsOf(a)&&[parentsOf(a).husb,parentsOf(a).wife].concat(parentsOf(a).chil).includes(pid));
+      if(already){status('They are already linked',true);return}}
+    else{pid='N:@I'+uid()+'@';queue('people',pid,data)}
+    const psex=data?data.sex:P[pid].sex;
     const newFam=()=>({id:'N:@F'+uid()+'@',husb:null,wife:null,chil:[],ev:{}});
     if(o.rel==='father'||o.rel==='mother'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f[o.rel==='father'?'husb':'wife']=pid;queue('families',f.id,famData(f))}
-    else if(o.rel==='spouse'){const f=newFam();const meHusb=as==='M'||(as!=='F'&&data.sex!=='M');f.husb=meHusb?a:pid;f.wife=meHusb?pid:a;queue('families',f.id,famData(f))}
+    else if(o.rel==='spouse'){const f=newFam();const meHusb=as==='M'||(as!=='F'&&psex!=='M');f.husb=meHusb?a:pid;f.wife=meHusb?pid:a;queue('families',f.id,famData(f))}
     else if(o.rel==='child'){const sel=document.getElementById('ed-fam').value;let f=sel!=='new'&&F[sel]?JSON.parse(JSON.stringify(F[sel])):Object.assign(newFam(),as==='F'?{wife:a}:{husb:a});f.chil.push(pid);queue('families',f.id,famData(f))}
     else if(o.rel==='sibling'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f.chil.push(pid);queue('families',f.id,famData(f))}
   }
