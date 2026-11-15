@@ -406,10 +406,22 @@ function openForm(o){
    <label>Notes<textarea id="ed-note" rows="4">${esc(p?p.notes.join('\n\n'):'')}</textarea></label>
    <div class="acts"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-back="${o.mode==='edit'?o.id:o.anchor}">Cancel</button>
    ${o.mode==='edit'?`<button class="btn danger" type="button" data-del="${o.id}">Delete person</button>`:''}</div>
+   ${o.mode==='edit'?`<div class="exist"><label>Same person entered twice? Find the other copy<input id="ed-merge" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-mres" hidden></div></div><div id="ed-mpick" class="hint" hidden></div>`:''}
    <p class="hint">Dates use GEDCOM style: 3 APR 1949, ABT 1913, BEF 1900.</p>
   </form>`;
   sheet.hidden=false;sheet.scrollTop=0;
   document.getElementById('edform').onsubmit=ev=>{ev.preventDefault();submitForm(o)};
+  const mx=document.getElementById('ed-merge');
+  if(mx){const rs=document.getElementById('ed-mres'),mp=document.getElementById('ed-mpick');
+    mx.addEventListener('input',()=>{const t=nrm(mx.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
+      const hits=Object.values(P).filter(p=>p.id!==o.id&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+    rs.addEventListener('click',e=>{const b=e.target.closest('button[data-mpick]');if(!b)return;e.stopPropagation();rs.hidden=true;const other=b.dataset.mpick;
+      const nm=id=>`<strong>${esc(niceName(P[id].name))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
+      mp.innerHTML=`Merge these two into one person? Relatives, details and files are combined. Admins can undo it from History.<br>1. ${nm(o.id)}<br>2. ${nm(other)}
+        <div class="acts"><button class="btn primary" type="button" data-mk="${esc(o.id)}|${esc(other)}">Merge, keep 1's details</button><button class="btn" type="button" data-mk="${esc(other)}|${esc(o.id)}">Merge, keep 2's details</button></div>`;mp.hidden=false;
+      mp.querySelectorAll('[data-mk]').forEach(x=>x.onclick=async ev=>{ev.stopPropagation();const[k,d]=x.dataset.mk.split('|');mp.querySelectorAll('button').forEach(y=>y.disabled=true);x.textContent='Merging…';
+        mergeInto(k,d);rebuild();await flush();setFocus(k);openSheet(k)})})}
   const ex=document.getElementById('ed-exist');
   if(ex){const rs=document.getElementById('ed-exres'),form=document.getElementById('edform');
     const newBits=()=>[...form.querySelectorAll('.two')].concat([document.getElementById('ed-note').closest('label'),document.getElementById('ed-or')]);
@@ -528,19 +540,23 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
 document.getElementById('export').onclick=openExport;
 
 // ---------- duplicates ----------
-function findDups(){const g={};Object.values(P).forEach(p=>{const k=nrm(niceName(p.name))+'|'+by(p);(g[k]=g[k]||[]).push(p)});
+function findDups(){ // same person entered twice: first and last name match, the shorter name fits inside the longer, birth years agree or one is blank
+  const W=p=>nrm(niceName(p.name)).split(' ').filter(Boolean);const g={};
+  Object.values(P).forEach(p=>{const w=W(p);if(w.length<2||w.includes('unknown'))return;const k=w[0]+'|'+w[w.length-1];(g[k]=g[k]||[]).push(p)});
   const pre=p=>p.id.split(':')[0];
   const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>nrm(niceName(P[x].name))).sort().join('+'):''};
   const sps=p=>famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean);
-  const kin=p=>{const f=parentsOf(p.id);return new Set([...(f?[f.husb,f.wife,...f.chil]:[]),...sps(p),...famsOf(p.id).flatMap(x=>x.chil)].filter(Boolean))};
+  const kin=p=>{const f=parentsOf(p.id);return new Set([...(f?[f.husb,f.wife]:[]),...sps(p),...famsOf(p.id).flatMap(x=>x.chil)].filter(Boolean))};
   const spN=p=>new Set(sps(p).map(x=>nrm(niceName(P[x].name))));
-  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&!(parNames(x)&&parNames(y)&&parNames(x)!==parNames(y))
+  const fits=(x,y)=>{const a=W(x),b=W(y);const[s,l]=a.length<=b.length?[a,b]:[b,a];return s.every(w=>l.includes(w))};
+  const parFit=(x,y)=>{const a=parNames(x),b=parNames(y);if(!a||!b||a===b)return true;const fx=parentsOf(x.id),fy=parentsOf(y.id);return fx===fy};
+  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
     &&!kin(x).has(y.id)&&!kin(y).has(x.id)
     &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
     &&!crossed(x,y)&&!crossed(y,x);
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
-  const out=[];Object.values(g).forEach(a=>{if(a.length<2||nrm(niceName(a[0].name))==='unknown')return;
-    a.sort((x,y)=>(x.id.startsWith('N:')?1:0)-(y.id.startsWith('N:')?1:0));
+  const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
+  const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j]))out.push([a[i],a[j]])});
   return out}
 function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
