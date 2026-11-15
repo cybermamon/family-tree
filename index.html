@@ -192,7 +192,7 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
     if(!cur)continue;
     if(lv===1){l1=tag;
       if(cur.t==='I'){
-        if(tag==='NAME'&&!cur.name)cur.name=val;
+        if(tag==='NAME'){cur.nameN=(cur.nameN||0)+1;if(!cur.name)cur.name=val;else cur.altName=val}
         else if(tag==='SEX')cur.sex=(val[0]||'U').toUpperCase();
         else if(tag==='FAMC')cur.famc.push(pfx+val);
         else if(tag==='FAMS')cur.fams.push(pfx+val);
@@ -209,6 +209,8 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
       if((tag==='CONT'||tag==='CONC')&&l1==='NOTE'&&cur.notes.length){cur.notes[cur.notes.length-1]+=(tag==='CONT'?'\n':'')+val}
       else if(cur.ev[l1]&&(tag==='DATE'||tag==='PLAC'))cur.ev[l1][tag.toLowerCase()]=val;
       else if(l1==='NAME'&&tag==='GIVN'&&!cur.given)cur.given=val;
+      else if(l1==='NAME'&&tag==='NICK'&&!cur.nick)cur.nick=val;
+      else if(l1==='NAME'&&tag==='TYPE'&&/birth|maiden/i.test(val)&&cur.nameN>1&&cur.altName&&!cur.maiden)cur.maiden=(cur.altName.match(/\/([^/]*)\//)||[])[1]||'';
     }
   }
 }
@@ -238,7 +240,7 @@ function rebuild(){
     const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
     p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
     [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
-    p.notes=o.note?[o.note]:[]}
+    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||''}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
   Object.values(F).forEach(f=>{if(f.husb&&!P[f.husb])f.husb=null;if(f.wife&&!P[f.wife])f.wife=null;f.chil=f.chil.filter(c=>P[c]);
     [f.husb,f.wife].forEach(x=>x&&P[x].fams.push(f.id));f.chil.forEach(c=>P[c].famc.push(f.id))});
@@ -354,7 +356,7 @@ function openSheet(id){selId=id;const p=P[id];
   const fams=famsOf(id);const sps=fams.map(f=>spouseIn(f,id)).filter(Boolean);const kids=fams.flatMap(f=>f.chil);
   const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(niceName(P[spouseIn(f,id)].name))+')':''}`:'').filter(Boolean);
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
-   ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2><div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
+   ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2>${p.nick||p.maiden?`<div class="sub">${[p.nick?'“'+esc(p.nick)+'”':'',p.maiden?'née '+esc(p.maiden):''].filter(Boolean).join(' · ')}</div>`:''}<div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
    <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
@@ -392,7 +394,11 @@ function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return 
 function status(msg,err){const s=document.getElementById('savestate');if(s){s.textContent=msg;s.style.color=err?'#c0392b':''}}
 function openForm(o){
   const p=o.mode==='edit'?P[o.id]:null;const a=o.anchor?P[o.anchor]:null;
-  const nm=splitName(p?p.name:(a&&(o.rel==='child'||o.rel==='sibling')?'/'+splitName(a.name).surname+'/':''));
+  const nm=splitName(p?p.name:(a&&(o.rel==='child'||o.rel==='sibling')?'/'+splitName(a.name).surname+'/':''));nm.middle='';
+  if(p){const w=nm.given.split(/\s+/).filter(Boolean);
+    if(p.middle!=null){if(p.middle&&nm.given.endsWith(' '+p.middle)){nm.middle=p.middle;nm.given=nm.given.slice(0,-p.middle.length-1)}}
+    else{const pf=parentsOf(p.id),mom=pf&&pf.wife&&P[pf.wife];const ms=mom&&(mom.maiden||splitName(mom.name).surname);
+      if(w.length>1&&ms&&w[w.length-1].toLowerCase()===ms.toLowerCase()){nm.middle=w.pop();nm.given=w.join(' ')}}}
   const sex=p?p.sex:o.rel==='father'?'M':o.rel==='mother'?'F':o.rel==='spouse'&&a?(a.sex==='M'?'F':a.sex==='F'?'M':'U'):'U';
   const b=p?(p.ev.BIRT||{}):{},d=p?(p.ev.DEAT||{}):{};
   let famPick='';
@@ -404,8 +410,10 @@ function openForm(o){
   <form id="edform" class="form">
    ${o.mode==='add'?`<div class="exist"><label>Already in the tree? Pick them here<input id="ed-exist" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-exres" hidden></div></div>
    <p class="hint" id="ed-chosen" hidden></p><p class="hint" id="ed-or">Or add a new person:</p>`:''}
-   <div class="two"><label>Given names<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"></label><label>Surname<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"></label></div>
-   <div class="two"><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr." autocomplete="off"></label>
+   <div class="two"><label>First name<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"></label><label>Middle name<input id="ed-middle" value="${esc(nm.middle)}" placeholder="Usually mother's maiden name" autocomplete="off"></label></div>
+   <div class="two"><label>Last name<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"></label><label>Maiden name<input id="ed-maiden" value="${esc(p&&p.maiden||'')}" placeholder="Last name at birth, if changed" autocomplete="off"></label></div>
+   <div class="two"><label>Nickname<input id="ed-nick" value="${esc(p&&p.nick||'')}" autocomplete="off"></label><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr." autocomplete="off"></label></div>
+   <div class="two">
    <label>Sex<select id="ed-sex"><option value="M"${sex==='M'?' selected':''}>Male</option><option value="F"${sex==='F'?' selected':''}>Female</option><option value="U"${sex==='U'?' selected':''}>Unknown</option></select></label></div>
    ${famPick}
    <div class="two"><label>Birth date<input id="ed-bdate" value="${esc(b.date||'')}" placeholder="3 APR 1949, ABT 1913"></label><label>Birth place<input id="ed-bplace" value="${esc(b.place||'')}"></label></div>
@@ -441,8 +449,8 @@ function openForm(o){
       document.getElementById('ed-unpick').onclick=ev=>{ev.stopPropagation();o.existing=null;ch.hidden=true;ex.closest('.exist').hidden=false;ex.value='';newBits().forEach(x=>x.hidden=false)}})}
 }
 function readForm(){const v=i=>document.getElementById(i).value.trim();
-  const g=v('ed-given'),s=v('ed-surname'),x=v('ed-suffix');
-  return{name:`${g} /${s}/${x?' '+x:''}`.trim(),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
+  const g=v('ed-given'),m=v('ed-middle'),s=v('ed-surname'),x=v('ed-suffix');
+  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
 function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
@@ -519,7 +527,8 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
 function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
   const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
   const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place)};
-  Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'),'1 SEX '+(p.sex||'U'));['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
+  Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'));{const n=splitName(p.name);if(n.given)L.push('2 GIVN '+n.given);if(n.surname)L.push('2 SURN '+n.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
+      if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
     p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
     mediaOf(p.id).forEach(m=>{L.push('1 OBJE','2 FILE '+new URL(m.url,location.href).href);if(m.caption)L.push('2 TITL '+m.caption)});
     p.famc.forEach(f=>fm[f]&&L.push('1 FAMC '+fm[f]));p.fams.forEach(f=>fm[f]&&L.push('1 FAMS '+fm[f]))});
@@ -616,7 +625,7 @@ function planImport(text){
       const o={name:m.name,sex:m.sex!=='U'?m.sex:ip.sex,birthDate:mb.date||b.date||'',birthPlace:mb.place||b.place||'',deathDate:md.date||d.date||'',deathPlace:md.place||d.place||'',note:m.notes.join('\n\n')||ip.notes.join('\n\n')};
       const before=[m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',m.notes.join('\n\n')].join('|'),after=[o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
-    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
   Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
     let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
@@ -672,7 +681,7 @@ const q=document.getElementById('q'),res=document.getElementById('results');
 const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 
 q.addEventListener('input',()=>{const t=norm(q.value.trim());if(!t){res.hidden=true;return}
-  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
+  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||''))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
   res.innerHTML=hits.length?hits.map(x=>`<button type="button" data-id="${x.p.id}">${esc(niceName(x.p.name))} <small>${years(x.p)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';res.hidden=false});
 res.addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;res.hidden=true;q.value='';q.blur();setFocus(b.dataset.id)});
 document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden=true});
