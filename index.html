@@ -303,6 +303,7 @@ const stage=document.getElementById('stage'),svg=document.getElementById('lines'
 let focusId=null,selId=null,scale=1,dims={w:0,h:0},fbox=null;
 const PAD=60;
 function render(keepView){
+  if(!P[focusId]){const f=homeId();if(!f){stage.querySelectorAll('.person,.more').forEach(e=>e.remove());svg.innerHTML='';return}focusId=f}
   layout(focusId);
   const minX=Math.min(...boxes.map(b=>b.x)),minY=Math.min(...boxes.map(b=>b.y));
   const maxX=Math.max(...boxes.map(b=>b.x+W)),maxY=Math.max(...boxes.map(b=>b.y+H));
@@ -423,8 +424,8 @@ function submitForm(o){const data=readForm();if(!data.name.replace(/[\s/]/g,''))
   }
   rebuild();render(true);openSheet(pid);flush()}
 function deletePerson(id){queue('people',id,Object.assign({},OV_P[id]||{},{deleted:true}));
-  const next=parentsOf(id)?(parentsOf(id).husb||parentsOf(id).wife):(famsOf(id).map(f=>spouseIn(f,id)).find(Boolean)||HOME.id);
-  rebuild();if(id===focusId)focusId=next&&P[next]?next:HOME.id;render(false);openSheet(focusId);flush()}
+  const next=parentsOf(id)?(parentsOf(id).husb||parentsOf(id).wife):(famsOf(id).map(f=>spouseIn(f,id)).find(Boolean)||homeId());
+  rebuild();if(id===focusId)focusId=next&&P[next]?next:homeId();render(false);openSheet(focusId);flush()}
 
 // ---------- documents & photos ----------
 const MEDIA={};let assets=null,pickFor=null;
@@ -540,7 +541,7 @@ stage.addEventListener('dblclick',e=>{const el=e.target.closest('.person');if(el
 const toHash=id=>id.replace(/[:@]/g,'').replace(/^([A-Z])(I)/,'$1-$2');
 const fromHash=h=>{const m=h.match(/^([A-Za-z])-?(I\d+)$/);return m?`${m[1].toUpperCase()}:@${m[2]}@`:null};
 function setFocus(id,fromNav){if(!P[id])return;focusId=id;render(false);openSheet(id);if(!fromNav){try{history.replaceState(null,'','#'+toHash(id))}catch(e){location.hash=toHash(id)}}}
-const HOME=(DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase()))||Object.values(P)[0];
+const homeId=()=>{const h=DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase());return h?h.id:(Object.keys(P)[0]||null)};
 addEventListener('hashchange',()=>{const id=fromHash(location.hash.slice(1));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
 
 // ---------- controls ----------
@@ -549,7 +550,7 @@ const upSel=document.getElementById('up'),dnSel=document.getElementById('down');
 if(upSel.value!==String(UP)){UP=3;upSel.value='3'}if(dnSel.value!==String(DOWN)){DOWN=2;dnSel.value='2'}
 upSel.onchange=()=>{UP=+upSel.value;try{localStorage.setItem('ft-up',UP)}catch(e){}render(false)};
 dnSel.onchange=()=>{DOWN=+dnSel.value;try{localStorage.setItem('ft-down',DOWN)}catch(e){}render(false)};
-document.getElementById('home').onclick=()=>HOME&&setFocus(HOME.id);
+document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
 document.getElementById('zin').onclick=()=>zoomTo(scale*1.2);
 document.getElementById('zout').onclick=()=>zoomTo(scale/1.2);
 scroller.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();const r=scroller.getBoundingClientRect();zoomTo(scale*Math.exp(-e.deltaY/300),e.clientX-r.left,e.clientY-r.top)}},{passive:false});
@@ -581,7 +582,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden
   const timer=setTimeout(()=>{if(got<2)status('Edits not loaded yet',true)},10000);
   const apply=(coll,target)=>db.collection(coll).onSnapshot(snap=>{got++;if(got>=2)clearTimeout(timer);
     for(const k in target)delete target[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.id)target[v.id]=v});
-    rebuild();if(!P[focusId])focusId=HOME.id;render(true);
+    rebuild();const hadFocus=!!P[focusId];if(!hadFocus)focusId=homeId();render(!hadFocus?false:true);
     if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},e=>status('Edits unavailable: '+(e&&e.code||''),true));
   apply('people',OV_P);apply('families',OV_F);
   db.collection('media').onSnapshot(snap=>{for(const k in MEDIA)delete MEDIA[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.key)MEDIA[v.key]=v});
@@ -589,7 +590,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden
   if(!sheet.hidden&&selId&&!document.getElementById('edform'))openSheet(selId)})();
 
 const start=fromHash(location.hash.slice(1));
-if(start&&P[start])setFocus(start,true);else if(HOME)setFocus(HOME.id);
+if(start&&P[start])setFocus(start,true);else if(homeId())setFocus(homeId());
 if(innerWidth<760)sheet.hidden=true;
 })();
 </script>
@@ -602,6 +603,7 @@ if(innerWidth<760)sheet.hidden=true;
 <script>
 (function(){
 const CFG=window.SITE_CONFIG||{url:'',key:''};
+const DEFAULT_CFG={"links": [{"husb": "Raymond Matias Santos", "wife": "Jenny Lynn Kaw Abarabar"}], "home": "Raymond Matias Santos", "order": ["S", "A"], "labels": {"S": "Santos–Matias tree", "A": "Abarabar tree"}, "files": {"S": "santos-matias-family-tree", "A": "samuel-abarabar-family-tree"}};
 if(!CFG.url||!CFG.key||/PASTE/.test(CFG.key)){document.getElementById('authcard').innerHTML='<h1>Santos Family Tree</h1><p class="lede">This site is almost ready. The admin still needs to add the Supabase publishable key to config.js.</p>';return}
 const sb=supabase.createClient(CFG.url,CFG.key);
 let me=null,role=null,myName='',booted=false;
@@ -677,7 +679,8 @@ async function start(){
   const cfgRow=rows.find(r=>r.prefix==='_config');const cfg=cfgRow?JSON.parse(cfgRow.ged):{};
   const order=cfg.order||[];
   const sources=rows.filter(r=>r.prefix!=='_config').sort((a,b)=>(order.indexOf(a.prefix)+1||99)-(order.indexOf(b.prefix)+1||99));
-  window.__DATA={sources,links:cfg.links||[],home:cfg.home||'',built:cfg.built||''};
+  window.__DATA={sources,links:cfg.links||DEFAULT_CFG.links,home:cfg.home||DEFAULT_CFG.home,built:cfg.built||''};
+  if(!sources.length)setTimeout(()=>{if(role==='admin')openResearch(true);else{const m=document.getElementById('meta');if(m)m.textContent='The family tree data has not been loaded yet. Ask the admin.'}},300);
   boot();
 }
 
@@ -728,7 +731,8 @@ function boot(){
   const tools=document.querySelector('header .tools');
   const chip=document.createElement('span');chip.className='userchip';chip.textContent=(myName||me.email)+' · '+role;tools.appendChild(chip);
   if(role==='admin'){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Members';b.onclick=openMembers;tools.appendChild(b);refreshPendingBadge(b);
-    const h=document.createElement('button');h.className='btn';h.type='button';h.textContent='History';h.onclick=openHistory;tools.appendChild(h)}
+    const h=document.createElement('button');h.className='btn';h.type='button';h.textContent='History';h.onclick=openHistory;tools.appendChild(h);
+    const rd=document.createElement('button');rd.className='btn';rd.type='button';rd.textContent='Research data';rd.onclick=()=>openResearch(false);tools.appendChild(rd)}
   const out=document.createElement('button');out.className='btn';out.type='button';out.textContent='Sign out';out.onclick=async()=>{await sb.auth.signOut();location.reload()};tools.appendChild(out);
 }
 async function refreshPendingBadge(b){const{data}=await sb.from('members').select('user_id').eq('role','pending');const n=(data||[]).length;b.textContent=n?`Members (${n} waiting)`:'Members'}
@@ -749,6 +753,30 @@ async function openMembers(){
 }
 // ---------- edit history with undo (admins) ----------
 const plainName=n=>(n||'').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknown';
+// ---------- research data upload (admins) ----------
+function guessSource(name){const n=name.toLowerCase();const hit=Object.entries(DEFAULT_CFG.labels).find(([p,l])=>(DEFAULT_CFG.files||{})[p]&&n.includes(DEFAULT_CFG.files[p]));
+  if(hit)return{prefix:hit[0],label:hit[1]};if(n.includes('abarabar'))return{prefix:'A',label:'Abarabar tree'};if(n.includes('santos')||n.includes('matias'))return{prefix:'S',label:'Santos–Matias tree'};return null}
+async function openResearch(empty){
+  const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Research data</h1><p class="lede">Loading…</p></div>';
+  const{data:rows,error}=await sb.from('research').select('prefix,label,updated_at,ged');
+  if(error){box.querySelector('.lede').textContent=error.message;return}
+  const list=rows.filter(r=>r.prefix!=='_config');
+  box.innerHTML=`<div class="card"><h1>Research data</h1><p class="lede">${empty?'The tree is empty until the research files are loaded. ':''}Upload the research GEDCOM files (santos-matias-family-tree.ged and samuel-abarabar-family-tree.ged). Uploading a newer copy replaces the old one; edits made on the site are kept.</p>
+   ${list.map(r=>`<div class="mrow"><div class="who"><strong>${esc(r.label)}</strong><small>${(r.ged.match(/ INDI/g)||[]).length} people · updated ${new Date(r.updated_at).toLocaleString()}</small></div><span></span></div>`).join('')}
+   <form id="rf"><label>GEDCOM files<input id="r-files" type="file" accept=".ged,.txt,text/plain" multiple required></label><button class="go" type="submit">Upload</button></form>
+   <p class="msg" id="rmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
+  $('#rclose').onclick=()=>box.hidden=true;
+  $('#rf').onsubmit=async e=>{e.preventDefault();const files=[...$('#r-files').files];const out=[];let next=0;
+    for(const f of files){const text=await f.text();if(!/^\s*0\s+HEAD/m.test(text)){$('#rmsg').textContent=f.name+' is not a GEDCOM file.';return}
+      let src=guessSource(f.name);if(!src){const used=new Set(rows.map(r=>r.prefix).concat(out.map(o=>o.prefix)));let p;do{p='R'+(++next)}while(used.has(p));src={prefix:p,label:f.name.replace(/\.[^.]+$/,'')}}
+      out.push({prefix:src.prefix,label:src.label,ged:text,updated_at:new Date().toISOString()})}
+    const prefixes=[...new Set(rows.map(r=>r.prefix).concat(out.map(o=>o.prefix)))].filter(p=>p!=='_config');
+    const order=DEFAULT_CFG.order.filter(p=>prefixes.includes(p)).concat(prefixes.filter(p=>!DEFAULT_CFG.order.includes(p)));
+    out.push({prefix:'_config',label:'config',ged:JSON.stringify({links:DEFAULT_CFG.links,home:DEFAULT_CFG.home,order,built:new Date().toLocaleDateString([], {day:'numeric',month:'short',year:'numeric'})}),updated_at:new Date().toISOString()});
+    $('#rmsg').textContent='Uploading…';const{error}=await sb.from('research').upsert(out);
+    if(error){$('#rmsg').textContent='Not uploaded: '+error.message+(/row-level/i.test(error.message)?' (run the extra SQL step first)':'');return}
+    $('#rmsg').textContent='Uploaded. Reloading…';setTimeout(()=>location.reload(),800)};
+}
 async function openHistory(){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>History</h1><p class="lede">Loading…</p></div>';
   const[{data:hs,error},{data:ms}]=await Promise.all([sb.from('history').select('*').order('at',{ascending:false}).limit(200),sb.from('members').select('user_id,name,email')]);
