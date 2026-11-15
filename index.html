@@ -139,6 +139,8 @@ img{max-width:100%}
 .mrow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--border)}
 .mrow .who{min-width:0;overflow-wrap:anywhere}
 .mrow small{color:var(--muted);display:block}
+.plink{grid-column:1/-1}.plink small{display:inline}.lnk{border:0;background:none;color:var(--accent);font:inherit;font-size:13px;padding:0 4px;cursor:pointer;text-decoration:underline}
+.psearch input{width:100%;margin-top:6px}.pres button{display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid var(--border);background:none;color:inherit;font:inherit;cursor:pointer}
 .mrow select{font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
 .mrow.pending{background:color-mix(in srgb,var(--focus) 12%,transparent)}
 @media (min-width:760px){#sheet{top:118px}}
@@ -172,7 +174,7 @@ img{max-width:100%}
 const DATA = window.__DATA;
 (function(){
 const W=168,H=64,GX=14,GY=60;
-const P={},F={};
+const P={},F={};let scopeCache=null;
 const CLIP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 7"/></svg>';
 const SIL='<svg viewBox="0 0 30 38" aria-hidden="true"><circle cx="15" cy="11" r="8"/><path d="M1 38c0-9 6-15 14-15s14 6 14 15z"/></svg>';
 
@@ -226,7 +228,7 @@ function fmtDate(d){if(!d)return'';return d.replace(/\bABT\b/i,'about').replace(
 });
 const BASE_P=JSON.parse(JSON.stringify(P)),BASE_F=JSON.parse(JSON.stringify(F));
 let OV_P={},OV_F={};
-function rebuild(){
+function rebuild(){scopeCache=null;
   for(const k in P)delete P[k];for(const k in F)delete F[k];
   const bp=JSON.parse(JSON.stringify(BASE_P)),bf=JSON.parse(JSON.stringify(BASE_F));Object.assign(P,bp);Object.assign(F,bf);
   for(const id in OV_F){const o=OV_F[id];if(o.deleted){delete F[id];continue}
@@ -353,7 +355,7 @@ function openSheet(id){selId=id;const p=P[id];
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2><div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
-   ${canEdit()?`<button class="btn" type="button" data-edit="${id}">Edit</button>
+   ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
    <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}</div>
    <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}
    ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
@@ -379,6 +381,20 @@ sheet.addEventListener('change',e=>{const s=e.target.closest('select[data-add]')
 // ---------- editing (saved to the page's shared database) ----------
 let db=null;
 const canEdit=()=>!!db&&!db.readOnly;
+// family admins: they edit their own ancestors and descendants, plus anyone (in-laws and their families) who is closer to them than to any other family admin
+
+function limited(){const pm=window.__PERM;return !!(pm&&pm.role==='family_admin')}
+function scope(){if(!limited())return null;if(scopeCache)return scopeCache;const pm=window.__PERM,me=pm.person,set=new Set();scopeCache=set;
+  if(!me||!P[me])return set;
+  const nb=id=>{const f=parentsOf(id),out=f?[f.husb,f.wife]:[];famsOf(id).forEach(x=>{out.push(spouseIn(x,id),...x.chil)});return out.filter(z=>z&&P[z])};
+  const bfs=starts=>{const d={};let q=starts.filter(x=>P[x]);q.forEach(x=>d[x]=0);for(let i=0;i<q.length;i++){const x=q[i];for(const y of nb(x))if(!(y in d)){d[y]=d[x]+1;q.push(y)}}return d};
+  const dMe=bfs([me]),dOt=bfs((pm.others||[]).filter(x=>x!==me));
+  const up=id=>{if(set.has(id))return;set.add(id);const f=parentsOf(id);if(f)[f.husb,f.wife].forEach(x=>x&&P[x]&&up(x))};
+  const down=id=>{set.add(id);famsOf(id).forEach(f=>f.chil.forEach(c=>{if(P[c]&&!set.has(c))down(c)}))};
+  up(me);down(me);
+  for(const id in dMe)if(!(id in dOt)||dMe[id]<=dOt[id])set.add(id);
+  return set}
+const canEditP=id=>canEdit()&&(!limited()||scope().has(id));
 const keyOf=id=>id.replace(/[:@]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return m?{given:m[1].trim(),surname:m[2].trim(),suffix:m[3].trim()}:{given:(n||'').trim(),surname:'',suffix:''}}
@@ -414,7 +430,7 @@ function openForm(o){
   const mx=document.getElementById('ed-merge');
   if(mx){const rs=document.getElementById('ed-mres'),mp=document.getElementById('ed-mpick');
     mx.addEventListener('input',()=>{const t=nrm(mx.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
-      const hits=Object.values(P).filter(p=>p.id!==o.id&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
+      const hits=Object.values(P).filter(p=>p.id!==o.id&&canEditP(p.id)&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
       rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
     rs.addEventListener('click',e=>{const b=e.target.closest('button[data-mpick]');if(!b)return;e.stopPropagation();rs.hidden=true;const other=b.dataset.mpick;
       const nm=id=>`<strong>${esc(niceName(P[id].name))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
@@ -443,7 +459,7 @@ async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>
   try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
   while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
   catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
-function submitForm(o){const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
+function submitForm(o){if(!canEditP(o.mode==='edit'?o.id:o.anchor)){status('Another family admin manages this person',true);return}const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
   let pid=o.id;
   if(o.mode==='edit'){queue('people',pid,data)}
   else{const a=o.anchor,as=P[a].sex;
@@ -459,7 +475,7 @@ function submitForm(o){const data=o.existing?null:readForm();if(data&&!data.name
     else if(o.rel==='sibling'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f.chil.push(pid);queue('families',f.id,famData(f))}
   }
   rebuild();render(true);openSheet(pid);flush()}
-function deletePerson(id){queue('people',id,Object.assign({},OV_P[id]||{},{deleted:true}));
+function deletePerson(id){if(!canEditP(id))return;queue('people',id,Object.assign({},OV_P[id]||{},{deleted:true}));
   const next=parentsOf(id)?(parentsOf(id).husb||parentsOf(id).wife):(famsOf(id).map(f=>spouseIn(f,id)).find(Boolean)||homeId());
   rebuild();if(id===focusId)focusId=next&&P[next]?next:homeId();render(false);openSheet(focusId);flush()}
 
@@ -472,7 +488,7 @@ let pickProfile=false;
 function filesSection(id){const ms=mediaOf(id);if(!ms.length&&!assets)return'';
   return`<div class="files"><h3>Documents and photos${ms.length?' ('+ms.length+')':''}</h3>
   ${ms.length?`<div class="thumbs">${ms.map(m=>`<button type="button" class="thumb" data-media="${esc(m.key)}">${isImg(m)?`<img src="${esc(m.url)}" alt="" loading="lazy">`:`<span class="doc">${esc(((m.name||'').split('.').pop()||'FILE').toUpperCase().slice(0,4))}</span>`}<span class="cap">${esc(m.caption||m.name||'File')}</span></button>`).join('')}</div>`:''}
-  ${assets&&canEdit()?`<div class="acts"><button class="btn" type="button" data-attach="${id}">Attach photo or document</button><button class="btn" type="button" data-profpick="${id}">${profileOf(id)?'Change profile photo':'Add profile photo'}</button></div><p class="hint" id="upmsg">Photos, scans and PDFs up to 20 MB.</p>`:''}</div>`}
+  ${assets&&canEditP(id)?`<div class="acts"><button class="btn" type="button" data-attach="${id}">Attach photo or document</button><button class="btn" type="button" data-profpick="${id}">${profileOf(id)?'Change profile photo':'Add profile photo'}</button></div><p class="hint" id="upmsg">Photos, scans and PDFs up to 20 MB.</p>`:''}</div>`}
 async function shrink(file){ // keep phone photos small enough to load fast; documents stay readable at 2400px
   if(!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)||file.size<2.5e6)return file;
   try{const bmp=await createImageBitmap(file);const k=Math.min(1,2400/Math.max(bmp.width,bmp.height));
@@ -491,11 +507,11 @@ const lb=document.getElementById('lb');
 function openLb(key){const m=MEDIA[key];if(!m)return;const p=P[m.person];
   lb.innerHTML=`<div class="bar"><strong>${esc(p?niceName(p.name):'')}</strong><span style="flex:1"></span><button class="btn" type="button" data-lbclose>Close</button></div>
    <div class="view">${isImg(m)?`<img src="${esc(m.url)}" alt="${esc(m.caption||'')}">`:`<p>${esc(m.name||'Document')}</p>`}</div>
-   <div class="bar"><input id="lb-cap" value="${esc(m.caption||'')}" aria-label="Caption" ${canEdit()?'':'readonly'}>
-   ${canEdit()?'<button class="btn" type="button" data-lbsave>Save caption</button>':''}
+   <div class="bar"><input id="lb-cap" value="${esc(m.caption||'')}" aria-label="Caption" ${canEditP(m.person)?'':'readonly'}>
+   ${canEditP(m.person)?'<button class="btn" type="button" data-lbsave>Save caption</button>':''}
    <a class="btn" href="${esc(m.url)}" target="_blank" rel="noopener">Open original</a>
-   ${canEdit()&&isImg(m)?`<button class="btn" type="button" data-lbprof>${m.profile?'Profile photo ✓':'Use as profile photo'}</button>`:''}
-   ${canEdit()?'<button class="btn danger" type="button" data-lbdel>Remove</button>':''}</div>`;
+   ${canEditP(m.person)&&isImg(m)?`<button class="btn" type="button" data-lbprof>${m.profile?'Profile photo ✓':'Use as profile photo'}</button>`:''}
+   ${canEditP(m.person)?'<button class="btn danger" type="button" data-lbdel>Remove</button>':''}</div>`;
   lb.dataset.key=key;lb.hidden=false}
 lb.addEventListener('click',async e=>{const t=e.target.closest('button');if(!t)return;const key=lb.dataset.key,m=MEDIA[key];
   if(t.dataset.lbclose!=null){lb.hidden=true;return}
@@ -524,8 +540,8 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
   <p class="sub">${Object.keys(P).length} people and ${Object.keys(F).length} families, including edits made here.</p>
   <div class="acts">${downloads?'<button class="btn primary" type="button" id="ex-save">Save .ged file</button>':''}<button class="btn" type="button" id="ex-copy">Copy GEDCOM text</button></div>
   <p class="hint" id="ex-msg"></p><textarea id="ex-text" rows="6" readonly hidden></textarea>
-  ${canEdit()?`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
-  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>
+  ${canEdit()?`${limited()?'':`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
+  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>`}
   <h3 class="sect">Duplicates</h3><p class="sub">Find people who appear twice (same name and birth year) and merge them into one.</p>
   <div class="acts"><button class="btn" type="button" id="dup-find">Find duplicates</button></div><div id="dup-list"></div>`:''}`;sheet.hidden=false;
   const df=document.getElementById('dup-find');if(df)df.onclick=showDups;
@@ -557,7 +573,7 @@ function findDups(){ // same person entered twice: first and last name match, th
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
   const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
-    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j]))out.push([a[i],a[j]])});
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
   return out}
 function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
   const sp=famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean).map(x=>niceName(P[x].name));
@@ -702,6 +718,8 @@ window.__attachRecords=async(items,progress)=>{
   if(docs.length){if(db.bulk)await db.bulk(docs.map(d=>({coll:'media',id:d.key,data:d})));else for(const d of docs)await db.collection('media').doc(d.key).set(d)}
   render(true);return{added,skipped,missing:[...new Set(missing)]}};
 
+window.__treeSearch=t=>{const w=nrm(t).split(' ').filter(Boolean);if(!w.length)return[];return Object.values(P).filter(p=>w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,15).map(p=>({id:p.id,name:niceName(p.name),years:years(p)}))};
+window.__personLabel=id=>P[id]?niceName(P[id].name)+(years(P[id])?' ('+years(P[id])+')':''):null;
 const start=fromHash(location.hash.slice(1));
 if(start&&P[start])setFocus(start,true);else if(homeId())setFocus(homeId());
 if(innerWidth<760)sheet.hidden=true;
@@ -781,12 +799,15 @@ async function start(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session){screen('signin');return}
   me=session.user;myName=(me.user_metadata&&me.user_metadata.name)||'';
-  const{data:m,error}=await sb.from('members').select('role,name').eq('user_id',me.id).maybeSingle();
+  let{data:m,error}=await sb.from('members').select('role,name,person').eq('user_id',me.id).maybeSingle();
+  if(error&&!/network|fetch/i.test(error.message||''))({data:m,error}=await sb.from('members').select('role,name').eq('user_id',me.id).maybeSingle()); // before the family-admin SQL step
   if(error){screen('signin',{text:'Could not reach the tree. Check your connection and try again.',err:true});return}
   role=m&&m.role;if(m&&m.name)myName=m.name;
   if(role==='blocked'){screen('blocked');return}
   if(!role||role==='pending'){screen('pending');return}
   if(booted){$('#auth').hidden=true;return}
+  let others=[];if(role==='family_admin'){const{data:fa}=await sb.rpc('family_admins');others=(fa||[]).map(r=>r.person||r).filter(x=>typeof x==='string')}
+  window.__PERM={role,person:(m&&m.person)||null,others};
   const{data:rows,error:e2}=await sb.from('research').select('prefix,label,ged,updated_at');
   if(e2){screen('pending',{text:'Could not load the tree: '+e2.message,err:true});return}
   const cfgRow=rows.find(r=>r.prefix==='_config');const cfg=cfgRow?JSON.parse(cfgRow.ged):{};
@@ -842,7 +863,7 @@ function boot(){
   const s=document.createElement('script');s.textContent=document.getElementById('treecode').textContent;document.body.appendChild(s);
   $('#auth').hidden=true;
   const tools=document.querySelector('header .tools');
-  const chip=document.createElement('span');chip.className='userchip';chip.textContent=(myName||me.email)+' · '+role;tools.appendChild(chip);
+  const chip=document.createElement('span');chip.className='userchip';chip.textContent=(myName||me.email)+' · '+role.replace('_',' ');tools.appendChild(chip);
   if(role==='admin'){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Members';b.onclick=openMembers;tools.appendChild(b);refreshPendingBadge(b);
     const h=document.createElement('button');h.className='btn';h.type='button';h.textContent='History';h.onclick=openHistory;tools.appendChild(h);
     const rd=document.createElement('button');rd.className='btn';rd.type='button';rd.textContent='Research data';rd.onclick=()=>openResearch(false);tools.appendChild(rd)}
@@ -853,16 +874,23 @@ async function refreshPendingBadge(b){const{data}=await sb.from('members').selec
 // ---------- member approval (admins) ----------
 async function openMembers(){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Members</h1><p class="lede">Loading…</p></div>';
-  const{data,error}=await sb.from('members').select('user_id,email,name,role,created_at').order('created_at');
+  let{data,error}=await sb.from('members').select('user_id,email,name,role,person,created_at').order('created_at');let hasPerson=!error;
+  if(error)({data,error}=await sb.from('members').select('user_id,email,name,role,created_at').order('created_at'));
   if(error){box.querySelector('.lede').textContent=error.message;return}
-  const roles=[['pending','Waiting'],['viewer','Can view'],['editor','Can view and edit'],['admin','Admin'],['blocked','Blocked']];
-  box.innerHTML=`<div class="card"><h1>Members</h1><p class="lede">Approve relatives by choosing what they can do. Viewers can only look; editors can add and change people and files; admins can also manage members and undo changes. Blocked members can no longer sign in to the tree.</p>
+  const roles=[['pending','Waiting'],['viewer','Can view'],['editor','Can view and edit'],['family_admin','Family admin'],['admin','Admin'],['blocked','Blocked']];
+  box.innerHTML=`<div class="card"><h1>Members</h1><p class="lede">Approve relatives by choosing what they can do. Viewers can only look; editors can add and change people and files; family admins can change only their own branch (link them to their profile below); admins can do everything, including managing members and undoing changes.${hasPerson?'':' <strong>Run the family admin SQL step to turn on profile links.</strong>'} Blocked members can no longer sign in to the tree.</p>
    ${data.map(m=>`<div class="mrow${m.role==='pending'?' pending':''}"><div class="who"><strong>${esc(m.name||'(no name)')}</strong><small>${esc(m.email)}${m.user_id===me.id?' · you':''}</small></div>
-   <select data-uid="${m.user_id}" aria-label="Access for ${esc(m.name||m.email)}" ${m.user_id===me.id?'disabled':''}>${roles.map(([v,l])=>`<option value="${v}"${v===m.role?' selected':''}>${l}</option>`).join('')}</select></div>`).join('')}
+   <select data-uid="${m.user_id}" aria-label="Access for ${esc(m.name||m.email)}" ${m.user_id===me.id?'disabled':''}>${roles.map(([v,l])=>`<option value="${v}"${v===m.role?' selected':''}>${l}</option>`).join('')}</select>
+   ${hasPerson?`<div class="plink"><small>Profile in tree: <span data-plabel="${m.user_id}">${esc(m.person?((window.__personLabel&&window.__personLabel(m.person))||'not found, link again'):'not linked')}</span></small> <button type="button" class="lnk" data-plink="${m.user_id}">${m.person?'Change':'Link'}</button>
+   <div class="psearch" data-pbox="${m.user_id}" hidden><input type="search" placeholder="Search the tree by name" autocomplete="off"><div class="pres"></div></div></div>`:''}</div>`).join('')}
    <p class="msg" id="mmsg"></p><div class="links"><span></span><button type="button" id="mclose">Close</button></div></div>`;
   $('#mclose').onclick=()=>{box.hidden=true;const b=[...document.querySelectorAll('header .btn')].find(x=>/^Members/.test(x.textContent));if(b)refreshPendingBadge(b)};
   box.querySelectorAll('select[data-uid]').forEach(sel=>sel.onchange=async()=>{const{error}=await sb.from('members').update({role:sel.value}).eq('user_id',sel.dataset.uid);
     $('#mmsg').textContent=error?'Not saved: '+error.message:'Saved.';sel.closest('.mrow').classList.toggle('pending',sel.value==='pending')});
+  box.querySelectorAll('[data-plink]').forEach(b=>b.onclick=()=>{const uid=b.dataset.plink,pb=box.querySelector(`[data-pbox="${uid}"]`);pb.hidden=!pb.hidden;const inp=pb.querySelector('input'),res=pb.querySelector('.pres');inp.focus();
+    inp.oninput=()=>{const hits=window.__treeSearch?window.__treeSearch(inp.value):[];res.innerHTML=hits.map(h=>`<button type="button" data-pid="${esc(h.id)}">${esc(h.name)} <small>${esc(h.years)}</small></button>`).join('')||(inp.value.trim()?'<small>No match</small>':'')};
+    res.onclick=async e=>{const t=e.target.closest('button[data-pid]');if(!t)return;const{error}=await sb.from('members').update({person:t.dataset.pid}).eq('user_id',uid);
+      if(error){$('#mmsg').textContent='Not saved: '+error.message;return}box.querySelector(`[data-plabel="${uid}"]`).textContent=window.__personLabel(t.dataset.pid);b.textContent='Change';pb.hidden=true;$('#mmsg').textContent='Saved. It applies the next time they open the tree.'}})
 }
 // ---------- edit history with undo (admins) ----------
 const plainName=n=>(n||'').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknown';
