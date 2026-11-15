@@ -433,8 +433,8 @@ function openForm(o){
       rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
     rs.addEventListener('click',e=>{const b=e.target.closest('button[data-mpick]');if(!b)return;e.stopPropagation();rs.hidden=true;const other=b.dataset.mpick;
       const nm=id=>`<strong>${esc(niceName(P[id].name))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
-      mp.innerHTML=`Merge these two into one person? Relatives, details and files are combined. Admins can undo it from History.<br>1. ${nm(o.id)}<br>2. ${nm(other)}
-        <div class="acts"><button class="btn primary" type="button" data-mk="${esc(o.id)}|${esc(other)}">Merge, keep 1's details</button><button class="btn" type="button" data-mk="${esc(other)}|${esc(o.id)}">Merge, keep 2's details</button></div>`;mp.hidden=false;
+      mp.innerHTML=`Merge these two into one person? Names, dates, places, notes, relatives and files are combined. Where they disagree, the one you keep wins and the other goes into the notes. Admins can undo it from History.<br>1. ${nm(o.id)}<br>2. ${nm(other)}
+        <div class="acts"><button class="btn primary" type="button" data-mk="${esc(o.id)}|${esc(other)}">Merge, prefer 1</button><button class="btn" type="button" data-mk="${esc(other)}|${esc(o.id)}">Merge, prefer 2</button></div>`;mp.hidden=false;
       mp.querySelectorAll('[data-mk]').forEach(x=>x.onclick=async ev=>{ev.stopPropagation();const[k,d]=x.dataset.mk.split('|');mp.querySelectorAll('button').forEach(y=>y.disabled=true);x.textContent='Merging…';
         mergeInto(k,d);rebuild();await flush();setFocus(k);openSheet(k)})})}
   const ex=document.getElementById('ed-exist');
@@ -580,7 +580,7 @@ function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(B
   return [par.length?'child of '+par.join(' & '):'',sp.length?'married to '+sp.join(', '):''].filter(Boolean).join('; ')||'no relatives linked'}
 function showDups(){const box=document.getElementById('dup-list');const ds=findDups();
   if(!ds.length){box.innerHTML='<p class="sub">No duplicates found.</p>';return}
-  box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge keeps the first one and moves the second one's relatives, details and files onto it. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
+  box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
    ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
     <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button></div></div>`).join('');
   box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
@@ -600,10 +600,29 @@ function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
       const am=a.ev.MARR||{},fm=f.ev.MARR||{};if(!am.date&&fm.date||!am.place&&fm.place)a.ev.MARR={date:am.date||fm.date||'',place:am.place||fm.place||''};
       touched[f.id]=Object.assign(JSON.parse(JSON.stringify(f)),{deleted:true})}else seen[k]=touched[f.id]||f});
   Object.values(touched).forEach(f=>queue('families',f.id,f.deleted?Object.assign(famData(f),{deleted:true}):famData(f)));
-  // details: fill what the kept person is missing
+  // details: combine both records; where they disagree, keep the first and save the other in the notes
+  const extra=[];
+  const prec=d=>!d?0:(/^\s*\d{1,2}\s+[A-Z]{3}/i.test(d)?3:/[A-Z]{3}\s+\d{4}/i.test(d)?2:1)-(/^(ABT|EST|CAL|BEF|AFT|BET)/i.test(d)?.5:0);
+  const yr=d=>((d||'').match(/\d{4}/)||[''])[0];
+  const toks=d=>nrm(d).split(' ').filter(w=>w&&!/^(abt|est|cal|bef|aft|bet|and)$/.test(w));
+  const pickDate=(a,b,label)=>{if(!a)return b||'';if(!b||nrm(a)===nrm(b))return a;const ta=toks(a),tb=toks(b);
+    if(ta.every(w=>tb.includes(w)))return prec(b)>=prec(a)?b:a;if(tb.every(w=>ta.includes(w)))return prec(a)>=prec(b)?a:b;
+    extra.push(label+' also recorded as '+fmtDate(b));return a};
+  const pickPlace=(a,b,label)=>{if(!a)return b||'';if(!b||a===b)return a;const x=nrm(a),y=nrm(b);if(y.includes(x))return b;if(x.includes(y))return a;extra.push(label+' also recorded as '+b);return a};
+  const longer=(a,b)=>{a=a||'';b=b||'';if(!a)return b;if(!b)return a;const x=nrm(a),y=nrm(b);return y.includes(x)&&y.length>x.length?b:a};
+  const kn=splitName(K.name),dn=splitName(D.name);
+  const km=K.middle!=null?K.middle:'',dm=D.middle!=null?D.middle:'';
+  const kg=km&&kn.given.endsWith(' '+km)?kn.given.slice(0,-km.length-1):kn.given,dg=dm&&dn.given.endsWith(' '+dm)?dn.given.slice(0,-dm.length-1):dn.given;
+  const g=longer(kg,dg),mid=longer(km,dm),sur=kn.surname||dn.surname,suf=kn.suffix||dn.suffix;
+  const name=`${g}${mid?' '+mid:''} /${sur}/${suf?' '+suf:''}`.trim();
+  const wn=n=>nrm(niceName(n)).split(' ').filter(Boolean);
+  if(!wn(D.name).every(w=>wn(name).includes(w)))extra.push('Also recorded as '+niceName(D.name));
+  if(dn.surname&&kn.surname&&nrm(dn.surname)!==nrm(kn.surname)&&!K.maiden&&!D.maiden&&(K.sex==='F'||D.sex==='F'))extra.push('Other surname: '+dn.surname);
   const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
-  const o={name:K.name,sex:K.sex!=='U'?K.sex:D.sex,birthDate:kb.date||db_.date||'',birthPlace:kb.place||db_.place||'',deathDate:kd.date||dd.date||'',deathPlace:kd.place||dd.place||'',
-    note:[...new Set(K.notes.concat(D.notes))].join('\n\n')};
+  const notes=[...new Set(K.notes.concat(D.notes))];
+  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',sex:K.sex!=='U'?K.sex:D.sex,
+    birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),
+    note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
   queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
   // files follow the person
   if(db)mediaOf(drop).forEach(m=>{m.person=keep;db.collection('media').doc(m.key).set(m).catch(()=>{})});
