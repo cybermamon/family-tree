@@ -344,9 +344,10 @@ function layout(focus){
   if(pf.wife){b=placeParent(pf.wife,x,'R')}
   anchor=a&&b?bracket(a,b,0):{x:(a||b).cx,y:(a||b).bot};
   const sibs=pf.chil.length?pf.chil:[focus];
-  const ws=sibs.map(s=>measureDesc(s,0,s===focus?DOWN:0));const tw=ws.reduce((s,w)=>s+w,0)+(sibs.length-1)*GX;
+  const SD=Math.min(DOWN,1); // brothers and sisters also show their children (nieces and nephews)
+  const ws=sibs.map(s=>measureDesc(s,0,s===focus?DOWN:SD));const tw=ws.reduce((s,w)=>s+w,0)+(sibs.length-1)*GX;
   let cx=anchor.x-tw/2;const kids=[];
-  sibs.forEach((s,i)=>{kids.push(placeDesc(s,0,s===focus?DOWN:0,cx,0));cx+=ws[i]+GX});
+  sibs.forEach((s,i)=>{kids.push(placeDesc(s,0,s===focus?DOWN:SD,cx,0));cx+=ws[i]+GX});
   drop(anchor,kids);
 }
 
