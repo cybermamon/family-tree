@@ -128,7 +128,7 @@ img{max-width:100%}
 .card .lede{color:var(--muted);margin:0 0 18px;line-height:1.5}
 .card form{display:flex;flex-direction:column;gap:12px}
 .card label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
-.card input{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
+.card input,.card select{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
 .card .go{font:inherit;font-weight:600;font-size:15px;padding:11px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-fg);cursor:pointer}
 .card .links{display:flex;justify-content:space-between;gap:8px;margin-top:14px;font-size:13px;flex-wrap:wrap}
 .card .links button{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
@@ -139,6 +139,7 @@ img{max-width:100%}
 .mrow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--border)}
 .mrow .who{min-width:0;overflow-wrap:anywhere}
 .mrow small{color:var(--muted);display:block}
+.creds{white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;user-select:all}
 .plink{grid-column:1/-1}.plink small{display:inline}.lnk{border:0;background:none;color:var(--accent);font:inherit;font-size:13px;padding:0 4px;cursor:pointer;text-decoration:underline}
 .psearch input{width:100%;margin-top:6px}.pres button{display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid var(--border);background:none;color:inherit;font:inherit;cursor:pointer}
 .mrow select{font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
@@ -356,7 +357,7 @@ function openSheet(id){selId=id;const p=P[id];
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2><div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
-   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}</div>
+   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
    <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}
    ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
    ${par.length?`<dt>Parents</dt><dd class="rel">${par.map(chip).join('')}</dd>`:''}
@@ -371,6 +372,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('button,img[data-med
   if(t.dataset.focus){setFocus(t.dataset.focus);return}
   if(t.dataset.edit){openForm({mode:'edit',id:t.dataset.edit});return}
   if(t.dataset.back){openSheet(t.dataset.back);return}
+  if(t.dataset.acct){window.__adminTools.createAccount(t.dataset.acct,niceName(P[t.dataset.acct].name));return}
   if(t.dataset.del){if(t.dataset.armed){deletePerson(t.dataset.del)}else{t.dataset.armed='1';t.textContent='Tap again to delete'}return}
   if(t.dataset.media){openLb(t.dataset.media);return}
   if(t.dataset.attach){pickFor=t.dataset.attach;pickProfile=false;const fp=document.getElementById('filepick');fp.accept='image/*,application/pdf';fp.multiple=true;fp.click();return}
@@ -737,7 +739,7 @@ function screen(kind,note){
   const a=$('#auth'),c=$('#authcard');a.hidden=false;
   const msg=`<p class="msg${note&&note.err?' err':''}" id="amsg">${esc(note?note.text:'')}</p>`;
   if(kind==='signin')c.innerHTML=`<h1>Infinite Family Tree</h1><p class="lede">Sign in to see and add to the family tree.</p>
-    <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
+    <form id="af"><label>Email or username<input id="a-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
     <label>Password<input id="a-pass" type="password" autocomplete="current-password" required minlength="6"></label>
     <button class="go" type="submit">Sign in</button>${msg}</form>
     <div class="links"><button type="button" data-s="signup">Create an account</button><button type="button" data-s="forgot">Forgot password?</button></div>`;
@@ -751,7 +753,7 @@ function screen(kind,note){
     <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
     <button class="go" type="submit">Send reset link</button>${msg}</form>
     <div class="links"><button type="button" data-s="signin">Back to sign in</button></div>`;
-  else if(kind==='newpass')c.innerHTML=`<h1>Set a new password</h1><p class="lede"></p>
+  else if(kind==='newpass')c.innerHTML=`<h1>Set a new password</h1><p class="lede">${esc(note&&note.lede||'')}</p>
     <form id="af"><label>New password<input id="a-pass" type="password" autocomplete="new-password" required minlength="8"></label>
     <button class="go" type="submit">Save password</button>${msg}</form>`;
   else if(kind==='blocked')c.innerHTML=`<h1>Access turned off</h1><p class="lede">An admin has turned off your access to the family tree. Contact them if you think this is a mistake.</p>${msg}
@@ -769,11 +771,11 @@ $('#authcard').addEventListener('click',async e=>{const b=e.target.closest('butt
   screen(s)});
 async function submit(kind){const v=id=>{const el=$('#'+id);return el?el.value.trim():''};const btn=$('#af .go');btn.disabled=true;say('Please wait…');
   try{
-    if(kind==='signin'){const{error}=await sb.auth.signInWithPassword({email:v('a-email'),password:$('#a-pass').value});if(error)throw error;await start()}
+    if(kind==='signin'){const id=v('a-email');const{error}=await sb.auth.signInWithPassword({email:id.includes('@')?id:id.toLowerCase()+'@'+USER_DOMAIN,password:$('#a-pass').value});if(error)throw error;await start()}
     else if(kind==='signup'){const{data,error}=await sb.auth.signUp({email:v('a-email'),password:$('#a-pass').value,options:{data:{name:v('a-name')},emailRedirectTo:here}});if(error)throw error;
       if(data.session)await start();else screen('signin',{text:'Check your email to confirm your account, then sign in.'})}
     else if(kind==='forgot'){const{error}=await sb.auth.resetPasswordForEmail(v('a-email'),{redirectTo:here});if(error)throw error;say('If that email has an account, a reset link is on its way.')}
-    else if(kind==='newpass'){const{error}=await sb.auth.updateUser({password:$('#a-pass').value});if(error)throw error;history.replaceState(null,'',here);await start()}
+    else if(kind==='newpass'){const{error}=await sb.auth.updateUser({password:$('#a-pass').value,data:{must_change_password:false}});if(error)throw error;history.replaceState(null,'',here);await start()}
   }catch(err){say(friendly(err),true)}finally{if(btn)btn.disabled=false}}
 function friendly(e){const m=(e&&e.message)||'Something went wrong.';
   if(/invalid login/i.test(m))return'Email or password is wrong.';
@@ -783,12 +785,14 @@ function friendly(e){const m=(e&&e.message)||'Something went wrong.';
 
 // ---------- start ----------
 let recovering=false;
+const USER_DOMAIN='family.infinitefate.com'; // accounts made by an admin sign in with a username
 sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovering=true;screen('newpass')}});
 async function start(){
   if(recovering)return;
   const{data:{session}}=await sb.auth.getSession();
   if(!session){screen('signin');return}
   me=session.user;myName=(me.user_metadata&&me.user_metadata.name)||'';
+  if(me.user_metadata&&me.user_metadata.must_change_password){screen('newpass',{lede:'Welcome'+(myName?', '+myName.split(' ')[0]:'')+'! Choose your own password to continue.'});return}
   let{data:m,error}=await sb.from('members').select('role,name,person').eq('user_id',me.id).maybeSingle();
   if(error&&!/network|fetch/i.test(error.message||''))({data:m,error}=await sb.from('members').select('role,name').eq('user_id',me.id).maybeSingle()); // before the family-admin SQL step
   if(error){screen('signin',{text:'Could not reach the tree. Check your connection and try again.',err:true});return}
@@ -867,6 +871,7 @@ const downloadsApi={async save({filename,data}){const blob=data instanceof Blob?
 
 function boot(){
   booted=true;const db=makeDb();
+  if(role==='admin')window.__adminTools={createAccount:openCreateAccount};
   window.claude={use:async n=>n==='db'?db:n==='assets'?(role==='viewer'?null:assetsApi):n==='downloads'?downloadsApi:null};
   const s=document.createElement('script');s.textContent=document.getElementById('treecode').textContent;document.body.appendChild(s);
   $('#auth').hidden=true;
@@ -879,6 +884,25 @@ function boot(){
 }
 async function refreshPendingBadge(b){const{data}=await sb.from('members').select('user_id').eq('role','pending');const n=(data||[]).length;b.textContent=n?`Members (${n} waiting)`:'Members'}
 
+// ---------- create an account for someone in the tree (admins) ----------
+function openCreateAccount(pid,name){
+  const box=$('#members');box.hidden=false;const parts=(name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z ]/g,'').split(' ').filter(Boolean);
+  const user=parts.length>1?parts[0]+'.'+parts[parts.length-1]:(parts[0]||'');
+  const pw=Array.from(crypto.getRandomValues(new Uint32Array(3)),n=>n.toString(36)).join('').slice(0,10);
+  box.innerHTML=`<div class="card"><h1>Create account</h1><p class="lede">For <strong>${esc(name)}</strong>. They sign in with this username and temporary password, then must choose their own password.</p>
+   <form id="cf"><label>Username<input id="c-user" value="${esc(user)}" required minlength="3" autocapitalize="none" spellcheck="false"></label>
+   <label>Temporary password<input id="c-pass" value="${esc(pw)}" required minlength="8"></label>
+   <label>Role<select id="c-role"><option value="viewer">Can view</option><option value="editor">Can view and edit</option><option value="family_admin">Family admin</option><option value="admin">Admin</option></select></label>
+   <button class="go" type="submit">Create account</button></form><p class="msg" id="cmsg"></p><div id="cdone"></div>
+   <div class="links"><span></span><button type="button" id="cclose">Close</button></div></div>`;
+  $('#cclose').onclick=()=>box.hidden=true;
+  $('#cf').onsubmit=async e=>{e.preventDefault();const b=$('#cf .go');b.disabled=true;$('#cmsg').textContent='Creating…';
+    try{const r=await treeCall({op:'createUser',username:$('#c-user').value.trim(),password:$('#c-pass').value,role:$('#c-role').value,person:pid,name});
+      const text=`Family tree: ${location.origin}\nUsername: ${r.login}\nTemporary password: ${$('#c-pass').value}\nYou'll choose your own password when you first sign in.`;
+      $('#cf').hidden=true;$('#cmsg').textContent='Account created. Send them these details:';
+      $('#cdone').innerHTML=`<pre class="creds">${esc(text)}</pre><button class="btn" type="button" id="ccopy">Copy</button>`;
+      $('#ccopy').onclick=async()=>{try{await navigator.clipboard.writeText(text);$('#ccopy').textContent='Copied'}catch(_){}}}
+    catch(err){$('#cmsg').textContent=err.message||'Could not create the account.';b.disabled=false}}}
 // ---------- member approval (admins) ----------
 async function openMembers(){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Members</h1><p class="lede">Loading…</p></div>';
