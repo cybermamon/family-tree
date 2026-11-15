@@ -277,6 +277,12 @@ function rebuild(){
     [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
     p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||''}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
+  // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
+  Object.values(F).forEach(f=>{f.chil=[...new Set(f.chil)]});
+  {const byChild={};Object.values(F).forEach(f=>f.chil.forEach(c=>(byChild[c]=byChild[c]||[]).push(f)));
+   for(const c in byChild){const fs=byChild[c];if(fs.length<2)continue;
+     fs.forEach(a=>{const pa=[a.husb,a.wife].filter(Boolean);if(fs.some(b=>{if(a===b||!b.chil.includes(c))return false;const pb=[b.husb,b.wife].filter(Boolean);
+       return pa.every(x=>pb.includes(x))&&(pa.length<pb.length||a.id>b.id)}))a.chil=a.chil.filter(x=>x!==c)})}}
   Object.values(F).forEach(f=>{if(f.husb&&!P[f.husb])f.husb=null;if(f.wife&&!P[f.wife])f.wife=null;f.chil=f.chil.filter(c=>P[c]);
     [f.husb,f.wife].forEach(x=>x&&P[x].fams.push(f.id));f.chil.forEach(c=>P[c].famc.push(f.id))});
   const n=Object.keys(OV_P).length+Object.keys(OV_F).length;
