@@ -667,6 +667,25 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden
     render(true);if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},()=>{});
   if(!sheet.hidden&&selId&&!document.getElementById('edform'))openSheet(selId)})();
 
+// bulk-attach research record images (the site's Research data panel hands over a zip's contents)
+window.__attachRecords=async(items,progress)=>{
+  if(!db||!assets||!canEdit())throw new Error('Sign in as an editor or admin first.');
+  const nm=s=>norm(niceName(s||'')).replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
+  const find=r=>{if(P[r.id])return r.id;const n=nm(r.name);const c=Object.values(P).filter(p=>nm(p.name)===n);
+    const y=r.year?c.filter(p=>by(p)===String(r.year)):c;const hit=y.length===1?y[0]:c.length===1?c[0]:null;return hit?hit.id:null};
+  let added=0,skipped=0;const missing=[],docs=[];const t0=Date.now();
+  for(let i=0;i<items.length;i++){const it=items[i];progress&&progress(i+1,items.length);
+    const pids=[...new Set(it.people.map(r=>{const id=find(r);if(!id)missing.push(r.name);return id}).filter(Boolean))];
+    const todo=pids.filter(pid=>!Object.values(MEDIA).some(m=>m.rec===it.file&&m.person===pid));
+    skipped+=pids.length-todo.length;if(!todo.length)continue;
+    const r=await assets.upload(await shrink(await it.blob()));
+    for(const pid of todo){const key='M-rec-'+keyOf(pid)+'-'+it.file.replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9]+/g,'-').slice(0,90);
+      const doc={id:key,key,asset:r.id,url:r.url,contentType:r.contentType,name:it.file,caption:it.caption||it.file,person:pid,rec:it.file,addedAt:new Date(t0+i).toISOString()};
+      if(it.profile&&!profileOf(pid)&&/^image\//.test(r.contentType||''))doc.profile=true;
+      MEDIA[key]=doc;docs.push(doc);added++}}
+  if(docs.length){if(db.bulk)await db.bulk(docs.map(d=>({coll:'media',id:d.key,data:d})));else for(const d of docs)await db.collection('media').doc(d.key).set(d)}
+  render(true);return{added,skipped,missing:[...new Set(missing)]}};
+
 const start=fromHash(location.hash.slice(1));
 if(start&&P[start])setFocus(start,true);else if(homeId())setFocus(homeId());
 if(innerWidth<760)sheet.hidden=true;
@@ -834,15 +853,28 @@ const plainName=n=>(n||'').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknow
 // ---------- research data upload (admins) ----------
 function guessSource(name){const n=name.toLowerCase();const hit=Object.entries(DEFAULT_CFG.labels).find(([p,l])=>(DEFAULT_CFG.files||{})[p]&&n.includes(DEFAULT_CFG.files[p]));
   if(hit)return{prefix:hit[0],label:hit[1]};if(n.includes('abarabar'))return{prefix:'A',label:'Abarabar tree'};if(n.includes('santos')||n.includes('matias'))return{prefix:'S',label:'Santos–Matias tree'};return null}
+let jszipP=null;
+function loadJSZip(){return jszipP=jszipP||new Promise((ok,no)=>{if(window.JSZip)return ok();const t=document.createElement('script');
+  t.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';t.onload=ok;t.onerror=()=>{jszipP=null;no(new Error('Could not load the zip reader.'))};document.head.appendChild(t)})}
 async function openResearch(empty){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Research data</h1><p class="lede">Loading…</p></div>';
   const{data:rows,error}=await sb.from('research').select('prefix,label,updated_at,ged');
   if(error){box.querySelector('.lede').textContent=error.message;return}
   const list=rows.filter(r=>r.prefix!=='_config');
-  box.innerHTML=`<div class="card"><h1>Research data</h1><p class="lede">${empty?'The tree is empty until the research files are loaded. ':''}Upload the research GEDCOM files (santos-matias-family-tree.ged and samuel-abarabar-family-tree.ged). Uploading a newer copy replaces the old one; edits made on the site are kept.</p>
+  box.innerHTML=`<div class="card"><h1>Research data</h1><p class="lede">${empty?'The tree is empty until the research files are loaded. ':''}Upload the research GEDCOM files (santos-matias-family-tree.ged and samuel-abarabar-family-tree.ged). Uploading a newer copy replaces the old one; edits made on the site are kept. Below that, upload a record photos zip to attach the research images to each person. Running it again skips photos already attached.</p>
    ${list.map(r=>`<div class="mrow"><div class="who"><strong>${esc(r.label)}</strong><small>${(r.ged.match(/ INDI/g)||[]).length} people · updated ${new Date(r.updated_at).toLocaleString()}</small></div><span></span></div>`).join('')}
    <form id="rf"><label>GEDCOM files<input id="r-files" type="file" accept=".ged,.txt,text/plain" multiple required></label><button class="go" type="submit">Upload</button></form>
-   <p class="msg" id="rmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
+   <p class="msg" id="rmsg"></p>
+   <form id="zf"><label>Record photos (.zip with manifest.json)<input id="z-file" type="file" accept=".zip,application/zip" required></label><button class="go" type="submit">Attach photos</button></form>
+   <p class="msg" id="zmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
+  $('#zf').onsubmit=async e=>{e.preventDefault();const f=$('#z-file').files[0];const say=t=>$('#zmsg').textContent=t;if(!f)return;
+    if(!window.__attachRecords){say('Open the tree first, then try again.');return}
+    try{say('Reading the zip…');await loadJSZip();const zip=await JSZip.loadAsync(f);const mf=zip.file('manifest.json');if(!mf){say('This zip has no manifest.json.');return}
+      const man=JSON.parse(await mf.async('string'));const types={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',pdf:'application/pdf',gif:'image/gif'};
+      const items=man.items.filter(it=>zip.file(it.file)).map(it=>Object.assign({},it,{blob:async()=>new Blob([await zip.file(it.file).async('arraybuffer')],{type:types[(it.file.split('.').pop()||'').toLowerCase()]||'application/octet-stream'})}));
+      const r=await window.__attachRecords(items,(i,n)=>say('Attaching '+i+' of '+n+'…'));
+      say('Done. Attached '+r.added+' photo'+(r.added===1?'':'s')+(r.skipped?', '+r.skipped+' already there':'')+(r.missing.length?'. Not found in the tree: '+r.missing.join(', '):'')+'.')}
+    catch(err){say('Stopped: '+((err&&err.message)||err))}};
   $('#rclose').onclick=()=>box.hidden=true;
   $('#rf').onsubmit=async e=>{e.preventDefault();const files=[...$('#r-files').files];const out=[];let next=0;
     for(const f of files){const text=await f.text();if(!/^\s*0\s+HEAD/m.test(text)){$('#rmsg').textContent=f.name+' is not a GEDCOM file.';return}
