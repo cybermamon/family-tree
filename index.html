@@ -194,6 +194,7 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
         else if(tag==='FAMC')cur.famc.push(pfx+val);
         else if(tag==='FAMS')cur.fams.push(pfx+val);
         else if(tag==='NOTE')cur.notes.push(val);
+        else if(tag==='_TREEID')cur.treeId=val;
         else if(/^(BIRT|CHR|BAPM|DEAT|BURI)$/.test(tag))cur.ev[tag]=cur.ev[tag]||{};
       }else{
         if(tag==='HUSB')cur.husb=pfx+val;
@@ -530,7 +531,14 @@ document.getElementById('export').onclick=openExport;
 function findDups(){const g={};Object.values(P).forEach(p=>{const k=nrm(niceName(p.name))+'|'+by(p);(g[k]=g[k]||[]).push(p)});
   const pre=p=>p.id.split(':')[0];
   const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>nrm(niceName(P[x].name))).sort().join('+'):''};
-  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&!(parNames(x)&&parNames(y)&&parNames(x)!==parNames(y));
+  const sps=p=>famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean);
+  const kin=p=>{const f=parentsOf(p.id);return new Set([...(f?[f.husb,f.wife,...f.chil]:[]),...sps(p),...famsOf(p.id).flatMap(x=>x.chil)].filter(Boolean))};
+  const spN=p=>new Set(sps(p).map(x=>nrm(niceName(P[x].name))));
+  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&!(parNames(x)&&parNames(y)&&parNames(x)!==parNames(y))
+    &&!kin(x).has(y.id)&&!kin(y).has(x.id)
+    &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
+    &&!crossed(x,y)&&!crossed(y,x);
+  function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const out=[];Object.values(g).forEach(a=>{if(a.length<2||nrm(niceName(a[0].name))==='unknown')return;
     a.sort((x,y)=>(x.id.startsWith('N:')?1:0)-(y.id.startsWith('N:')?1:0));
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j]))out.push([a[i],a[j]])});
@@ -577,7 +585,8 @@ function planImport(text){
   const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p)});
   const map={},newP=[],fill=[];let matched=0;
   Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
-    if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
+    if(ip.treeId&&P[ip.treeId])m=P[ip.treeId];
+    else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
     else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
     const b=ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{},d=ip.ev.DEAT||ip.ev.BURI||{};
     if(m){matched++;map[ip.id]=m.id;const mb=birthOf(m),md=deathOf(m);
