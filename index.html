@@ -600,7 +600,12 @@ function findDups(){ // same person entered twice: first and last name match, th
   const spN=p=>new Set(sps(p).map(x=>nrm(niceName(P[x].name))));
   const fits=(x,y)=>{const a=W(x),b=W(y);const[s,l]=a.length<=b.length?[a,b]:[b,a];return s.every(w=>l.includes(w))};
   const parFit=(x,y)=>{const a=parNames(x),b=parNames(y);if(!a||!b||a===b)return true;const fx=parentsOf(x.id),fy=parentsOf(y.id);return fx===fy};
-  const same=(x,y)=>!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
+  const parIds=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean):[]};
+  const kidIds=p=>famsOf(p.id).flatMap(x=>x.chil);
+  // strong evidence: same name and they share a parent, a spouse or a child (the same record imported twice)
+  const shares=(x,y)=>parIds(x).some(z=>parIds(y).includes(z))||sps(x).some(z=>sps(y).includes(z))||kidIds(x).some(z=>kidIds(y).includes(z));
+  const strong=(x,y)=>fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&shares(x,y)&&!kin(x).has(y.id)&&!kin(y).has(x.id);
+  const same=(x,y)=>strong(x,y)||!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
     &&!kin(x).has(y.id)&&!kin(y).has(x.id)
     &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
     &&!crossed(x,y)&&!crossed(y,x);
