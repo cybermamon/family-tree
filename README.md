@@ -1,4 +1,4 @@
-# Santos Family Tree
+# Infinite Family Tree
 
 Private family tree site at https://family.infinitefate.com. Relatives sign up, an admin approves them,
 and approved members can view, edit and add people, photos and documents.

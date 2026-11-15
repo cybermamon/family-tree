@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Santos Family Tree</title>
+<title>Infinite Family Tree</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap">
@@ -147,7 +147,7 @@ img{max-width:100%}
 </head>
 <body>
 <header>
-  <h1>Santos Family Tree</h1>
+  <h1>Infinite Family Tree</h1>
   <span class="meta" id="meta"></span>
   <div class="tools">
     <div class="search">
@@ -497,7 +497,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
 
 // ---------- export ----------
 function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
-  const L=['0 HEAD','1 SOUR SantosFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
+  const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
   const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place)};
   Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'),'1 SEX '+(p.sex||'U'));['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
     p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
@@ -519,8 +519,8 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
   const ip=document.getElementById('im-pick');if(ip)ip.onclick=()=>document.getElementById('gedpick').click();
   const msg=t=>document.getElementById('ex-msg').textContent=t;
   const sv=document.getElementById('ex-save');if(sv)sv.onclick=async()=>{const g=toGed();
-    try{await downloads.save({filename:'santos-family-tree.ged',data:g});msg('Saved.')}
-    catch(e){if(e&&e.code==='rejected_extension'){try{await downloads.save({filename:'santos-family-tree.ged.txt',data:g});msg('Saved as .ged.txt. Remove the .txt ending before importing.')}catch(e2){msg(e2&&e2.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}}
+    try{await downloads.save({filename:'infinite-family-tree.ged',data:g});msg('Saved.')}
+    catch(e){if(e&&e.code==='rejected_extension'){try{await downloads.save({filename:'infinite-family-tree.ged.txt',data:g});msg('Saved as .ged.txt. Remove the .txt ending before importing.')}catch(e2){msg(e2&&e2.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}}
       else msg(e&&e.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}};
   document.getElementById('ex-copy').onclick=()=>{const g=toGed(),ta=document.getElementById('ex-text');ta.value=g;
     navigator.clipboard.writeText(g).then(()=>msg('Copied. Paste into a text file named .ged.')).catch(()=>{ta.hidden=false;ta.select();msg('Select all and copy the text below.')})}}
@@ -664,7 +664,7 @@ if(innerWidth<760)sheet.hidden=true;
 })();
 </script>
 
-<div id="auth"><div class="card" id="authcard"><h1>Santos Family Tree</h1><p class="lede">Loading…</p></div></div>
+<div id="auth"><div class="card" id="authcard"><h1>Infinite Family Tree</h1><p class="lede">Loading…</p></div></div>
 <div id="members" hidden></div>
 
 <script src="config.js"></script>
@@ -673,7 +673,7 @@ if(innerWidth<760)sheet.hidden=true;
 (function(){
 const CFG=window.SITE_CONFIG||{url:'',key:''};
 const DEFAULT_CFG={"links": [{"husb": "Raymond Matias Santos", "wife": "Jenny Lynn Kaw Abarabar"}], "home": "Raymond Matias Santos", "order": ["S", "A"], "labels": {"S": "Santos–Matias tree", "A": "Abarabar tree"}, "files": {"S": "santos-matias-family-tree", "A": "samuel-abarabar-family-tree"}};
-if(!CFG.url||!CFG.key||/PASTE/.test(CFG.key)){document.getElementById('authcard').innerHTML='<h1>Santos Family Tree</h1><p class="lede">This site is almost ready. The admin still needs to add the Supabase publishable key to config.js.</p>';return}
+if(!CFG.url||!CFG.key||/PASTE/.test(CFG.key)){document.getElementById('authcard').innerHTML='<h1>Infinite Family Tree</h1><p class="lede">This site is almost ready. The admin still needs to add the Supabase publishable key to config.js.</p>';return}
 const sb=supabase.createClient(CFG.url,CFG.key);
 let me=null,role=null,myName='',booted=false;
 const $=s=>document.querySelector(s);
@@ -684,7 +684,7 @@ const here=location.origin+location.pathname;
 function screen(kind,note){
   const a=$('#auth'),c=$('#authcard');a.hidden=false;
   const msg=`<p class="msg${note&&note.err?' err':''}" id="amsg">${esc(note?note.text:'')}</p>`;
-  if(kind==='signin')c.innerHTML=`<h1>Santos Family Tree</h1><p class="lede">Sign in to see and add to the family tree.</p>
+  if(kind==='signin')c.innerHTML=`<h1>Infinite Family Tree</h1><p class="lede">Sign in to see and add to the family tree.</p>
     <form id="af"><label>Email<input id="a-email" type="email" autocomplete="email" required></label>
     <label>Password<input id="a-pass" type="password" autocomplete="current-password" required minlength="6"></label>
     <button class="go" type="submit">Sign in</button>${msg}</form>
