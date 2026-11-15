@@ -193,7 +193,7 @@ img{max-width:100%}
     <label class="gen">Up <select id="up"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>8</option></select></label>
     <label class="gen">Down <select id="down"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
     <button class="btn" id="home" type="button">Home</button>
-    <button class="btn" id="views-open" type="button">List &amp; stats</button>
+    <button class="btn" id="views-open" type="button">List, stats &amp; birthdays</button>
     <button class="btn" id="export" type="button">GEDCOM</button>
     <span class="meta" id="savestate" aria-live="polite"></span>
   </div>
@@ -734,7 +734,7 @@ const surnameOf=p=>splitName(p.name).surname.trim();
 const firstOf=p=>(splitName(p.name).given.split(/\s+/)[0]||'').replace(/[^\p{L}.'-]/gu,'');
 const townOf=pl=>(pl||'').split(',')[0].trim();
 const bplace=p=>(p.ev.BIRT&&p.ev.BIRT.place)||(p.ev.CHR&&p.ev.CHR.place)||(p.ev.BAPM&&p.ev.BAPM.place)||'';
-let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:''};
+let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false};
 function scopePeople(){const all=Object.values(P);
   if(V.scope==='anc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);const f=parentsOf(x);if(f)st.push(f.husb,f.wife)}return all.filter(p=>s.has(p.id))}
   if(V.scope==='desc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);famsOf(x).forEach(f=>{st.push(...f.chil);const sp=spouseIn(f,x);if(sp)s.add(sp)})}return all.filter(p=>s.has(p.id))}
@@ -745,7 +745,7 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
   if(!V.line&&lines.length)V.line=lines[0][0];
   const fname=P[focusId]?niceName(P[focusId].name):'this person';
-  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button></div>
+  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button></div>
     <select id="v-scope" aria-label="Who to include"><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
     <select id="v-line" aria-label="Family line"${V.scope==='line'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
     ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
@@ -755,7 +755,7 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   document.getElementById('v-line').onchange=e=>{V.line=e.target.value;openViews()};
   const qi=document.getElementById('v-q');if(qi)qi.oninput=()=>{V.q=qi.value;drawList()};
   document.getElementById('v-close').onclick=()=>{box.hidden=true};
-  if(V.tab==='list')drawList();else drawStats()}
+  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else drawStats()}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
   let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
   const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
@@ -808,6 +808,23 @@ function drawStats(){const body=document.getElementById('v-body');const ps=scope
     ${hbars(count(firstOf),'Most common first names')}
     ${hbars(count(p=>townOf(bplace(p))),'Most common birthplaces')}
   </div><p class="vnote">Based on the dates in the tree. People without dates are counted where possible but left out of ages.</p>`}
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MON3={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+function bdayOf(p){const d=(birthOf(p).date||'').toUpperCase();if(/^(ABT|EST|CAL|BEF|AFT|BET)/.test(d))return null;const m=d.match(/(\d{1,2})\s+([A-Z]{3})/);if(!m||!(m[2] in MON3))return null;return{day:+m[1],mon:MON3[m[2]],year:+((d.match(/\d{4}/)||[0])[0])||null}}
+function drawBirthdays(){const body=document.getElementById('v-body');const today=new Date();today.setHours(0,0,0,0);
+  const rows=[];scopePeople().forEach(p=>{const b=bdayOf(p);if(!b)return;const dead=isDead(p);if(dead&&!V.past)return;
+    let next=new Date(today.getFullYear(),b.mon,b.day);if(next<today)next=new Date(today.getFullYear()+1,b.mon,b.day);
+    const days=Math.round((next-today)/864e5);rows.push({p,b,dead,next,days,turns:b.year?next.getFullYear()-b.year:null})});
+  rows.sort((a,b)=>a.days-b.days||plateName(a.p).localeCompare(plateName(b.p)));
+  const groups=[];rows.forEach(r=>{const k=r.next.getFullYear()+'-'+r.next.getMonth();let g=groups[groups.length-1];if(!g||g.k!==k)groups.push(g={k,label:MONTHS[r.next.getMonth()]+(r.next.getFullYear()!==today.getFullYear()?' '+r.next.getFullYear():''),rows:[]});g.rows.push(r)});
+  const when=d=>d===0?'<strong>Today</strong>':d===1?'Tomorrow':d<7?'In '+d+' days':'';
+  body.innerHTML=`<p class="vnote" style="margin:0 0 8px">${rows.length} ${V.past?'birthdays':'birthdays of living family'}, starting today. Only people with a full birth date (day and month) are listed.
+    <label style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;color:var(--fg)"><input type="checkbox" id="v-past"${V.past?' checked':''}> Include those who have passed</label></p>
+   ${groups.map(g=>`<h3 style="font-size:14px;margin:16px 0 4px">${g.label}</h3><table class="ptable"><tbody>${g.rows.map(r=>`<tr data-id="${esc(r.p.id)}"><td style="width:64px">${r.b.day} ${MONTHS[r.b.mon].slice(0,3)}</td>
+     <td><span class="sx" style="background:var(--${r.p.sex==='M'?'m':r.p.sex==='F'?'f':'u'}-edge)" aria-hidden="true"></span>${esc(plateName(r.p))}${r.dead?' <small>(passed)</small>':''}</td>
+     <td style="text-align:right;white-space:nowrap">${r.turns!=null?(r.dead?r.turns+' years since birth':'Turns '+r.turns):''} <small>${when(r.days)}</small></td></tr>`).join('')}</tbody></table>`).join('')||'<p class="vnote">No full birth dates yet. Add a day and month to someone’s birth date to see them here.</p>'}`;
+  const cb=document.getElementById('v-past');if(cb)cb.onchange=()=>{V.past=cb.checked;drawBirthdays()};
+  body.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{document.getElementById('views').hidden=true;setFocus(r.dataset.id)})}
 document.getElementById('views-open').onclick=()=>openViews();
 document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
 if(DATA&&DATA.homeId&&P[DATA.homeId]){const hb=document.getElementById('home');hb.textContent='Me';hb.title='Go back to yourself'}
