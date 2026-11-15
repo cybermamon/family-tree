@@ -357,7 +357,7 @@ function openSheet(id){selId=id;const p=P[id];
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(niceName(p.name))}</h2><div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
-   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
+   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
    <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}
    ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
    ${par.length?`<dt>Parents</dt><dd class="rel">${par.map(chip).join('')}</dd>`:''}
@@ -870,7 +870,7 @@ const downloadsApi={async save({filename,data}){const blob=data instanceof Blob?
 
 function boot(){
   booted=true;const db=makeDb();
-  if(role==='admin')window.__adminTools={createAccount:openCreateAccount};
+  if(role==='admin'||role==='family_admin')window.__adminTools={createAccount:openCreateAccount,limited:role!=='admin'};
   window.claude={use:async n=>n==='db'?db:n==='assets'?(role==='viewer'?null:assetsApi):n==='downloads'?downloadsApi:null};
   const s=document.createElement('script');s.textContent=document.getElementById('treecode').textContent;document.body.appendChild(s);
   $('#auth').hidden=true;
@@ -879,6 +879,8 @@ function boot(){
   if(role==='admin'){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Members';b.onclick=openMembers;tools.appendChild(b);refreshPendingBadge(b);
     const h=document.createElement('button');h.className='btn';h.type='button';h.textContent='History';h.onclick=openHistory;tools.appendChild(h);
     const rd=document.createElement('button');rd.className='btn';rd.type='button';rd.textContent='Research data';rd.onclick=()=>openResearch(false);tools.appendChild(rd)}
+  if(role==='family_admin'){const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Sign-ups';b.onclick=()=>openSignups(b);tools.appendChild(b);
+    treeCall({op:'pending'}).then(r=>{const n=r.pending.length;if(n)b.textContent=`Sign-ups (${n} waiting)`}).catch(()=>{})}
   const out=document.createElement('button');out.className='btn';out.type='button';out.textContent='Sign out';out.onclick=async()=>{await sb.auth.signOut();location.reload()};tools.appendChild(out);
 }
 async function refreshPendingBadge(b){const{data}=await sb.from('members').select('user_id').eq('role','pending');const n=(data||[]).length;b.textContent=n?`Members (${n} waiting)`:'Members'}
@@ -890,7 +892,7 @@ function openCreateAccount(pid,name){
   box.innerHTML=`<div class="card"><h1>Create account</h1><p class="lede">For <strong>${esc(name)}</strong>. They sign in with their email and this temporary password, then must choose their own password.</p>
    <form id="cf"><label>Their email<input id="c-user" type="email" required autocomplete="off"></label>
    <label>Temporary password<input id="c-pass" value="${esc(pw)}" required minlength="8"></label>
-   <label>Role<select id="c-role"><option value="viewer">Can view</option><option value="editor">Can view and edit</option><option value="family_admin">Family admin</option><option value="admin">Admin</option></select></label>
+   <label>Role<select id="c-role"><option value="viewer">Can view</option><option value="editor">Can view and edit</option>${role==='admin'?'<option value="family_admin">Family admin</option><option value="admin">Admin</option>':''}</select></label>
    <button class="go" type="submit">Create account</button></form><p class="msg" id="cmsg"></p><div id="cdone"></div>
    <div class="links"><span></span><button type="button" id="cclose">Close</button></div></div>`;
   $('#cclose').onclick=()=>box.hidden=true;
@@ -901,6 +903,26 @@ function openCreateAccount(pid,name){
       $('#cdone').innerHTML=`<pre class="creds">${esc(text)}</pre><button class="btn" type="button" id="ccopy">Copy</button>`;
       $('#ccopy').onclick=async()=>{try{await navigator.clipboard.writeText(text);$('#ccopy').textContent='Copied'}catch(_){}}}
     catch(err){$('#cmsg').textContent=err.message||'Could not create the account.';b.disabled=false}}}
+// ---------- family admins approve sign-ups for their own family ----------
+async function openSignups(btn){
+  const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Sign-ups</h1><p class="lede">Loading…</p></div>';
+  let list;try{list=(await treeCall({op:'pending'})).pending}catch(err){box.querySelector('.lede').textContent=err.message;return}
+  box.innerHTML=`<div class="card"><h1>Sign-ups</h1><p class="lede">${list.length?'If someone waiting is from your family, find them in the tree, choose what they can do, and approve. Leave anyone you don’t know for the admin.':'Nobody is waiting.'}</p>
+   ${list.map(m=>`<div class="mrow pending" data-row="${m.user_id}"><div class="who"><strong>${esc(m.name||'(no name)')}</strong><small>${esc(m.email||'')}</small></div>
+    <select data-role aria-label="Access"><option value="viewer">Can view</option><option value="editor">Can view and edit</option></select>
+    <div class="plink"><small>Who are they in the tree? <span data-plabel>not picked</span></small>
+    <div class="psearch"><input type="search" placeholder="Search your family by name" autocomplete="off"><div class="pres"></div></div>
+    <button class="btn" type="button" data-approve disabled>Approve</button></div></div>`).join('')}
+   <p class="msg" id="smsg"></p><div class="links"><span></span><button type="button" id="sclose">Close</button></div></div>`;
+  $('#sclose').onclick=()=>box.hidden=true;
+  box.querySelectorAll('[data-row]').forEach(row=>{let pid=null;const inp=row.querySelector('input'),res=row.querySelector('.pres'),ap=row.querySelector('[data-approve]');
+    inp.oninput=()=>{const ed=window.__PERM&&window.__PERM.editable;const hits=(window.__treeSearch?window.__treeSearch(inp.value):[]).filter(h=>!ed||ed.has(h.id));
+      res.innerHTML=hits.map(h=>`<button type="button" data-pid="${esc(h.id)}">${esc(h.name)} <small>${esc(h.years)}</small></button>`).join('')||(inp.value.trim()?'<small>No match in your family</small>':'')};
+    res.onclick=e=>{const t=e.target.closest('button[data-pid]');if(!t)return;pid=t.dataset.pid;row.querySelector('[data-plabel]').textContent=window.__personLabel(pid);res.innerHTML='';inp.value='';ap.disabled=false};
+    ap.onclick=async()=>{ap.disabled=true;ap.textContent='Approving…';
+      try{await treeCall({op:'approve',user_id:row.dataset.row,person:pid,role:row.querySelector('[data-role]').value});row.remove();$('#smsg').textContent='Approved. They can sign in now.';
+        const n=box.querySelectorAll('[data-row]').length;btn.textContent=n?`Sign-ups (${n} waiting)`:'Sign-ups'}
+      catch(err){$('#smsg').textContent=err.message;ap.disabled=false;ap.textContent='Approve'}}})}
 // ---------- member approval (admins) ----------
 async function openMembers(){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Members</h1><p class="lede">Loading…</p></div>';
@@ -908,7 +930,7 @@ async function openMembers(){
   if(error)({data,error}=await sb.from('members').select('user_id,email,name,role,created_at').order('created_at'));
   if(error){box.querySelector('.lede').textContent=error.message;return}
   const roles=[['pending','Waiting'],['viewer','Can view'],['editor','Can view and edit'],['family_admin','Family admin'],['admin','Admin'],['blocked','Blocked']];
-  box.innerHTML=`<div class="card"><h1>Members</h1><p class="lede">Approve relatives by choosing what they can do. Viewers can only look; editors can add and change people and files; family admins can change only their own branch (link them to their profile below); admins can do everything, including managing members and undoing changes.${hasPerson?'':' <strong>Run the family admin SQL step to turn on profile links.</strong>'} Blocked members can no longer sign in to the tree.</p>
+  box.innerHTML=`<div class="card"><h1>Members</h1><p class="lede">Approve relatives by choosing what they can do. Everyone sees only their own family, so link each member to their profile below. Viewers can only look; editors can change themselves, their ancestors and descendants, and those people's spouses; family admins can change their whole branch, approve sign-ups from their family and create accounts for them; admins can do everything, including managing members and undoing changes.${hasPerson?'':' <strong>Run the family admin SQL step to turn on profile links.</strong>'} Blocked members can no longer sign in to the tree.</p>
    ${data.map(m=>`<div class="mrow${m.role==='pending'?' pending':''}"><div class="who"><strong>${esc(m.name||'(no name)')}</strong><small>${esc(m.email)}${m.user_id===me.id?' · you':''}</small></div>
    <select data-uid="${m.user_id}" aria-label="Access for ${esc(m.name||m.email)}" ${m.user_id===me.id?'disabled':''}>${roles.map(([v,l])=>`<option value="${v}"${v===m.role?' selected':''}>${l}</option>`).join('')}</select>
    ${hasPerson?`<div class="plink"><small>Profile in tree: <span data-plabel="${m.user_id}">${esc(m.person?((window.__personLabel&&window.__personLabel(m.person))||'not found, link again'):'not linked')}</span></small> <button type="button" class="lnk" data-plink="${m.user_id}">${m.person?'Change':'Link'}</button>

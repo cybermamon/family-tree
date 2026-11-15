@@ -117,7 +117,10 @@ function viewFor(member, research, docs, admins) {
   const G = buildGraph(sources, cfg.links, byId('people'), byId('families'));
   const V = visibleSet(G, member.person);
   let E;
-  if (member.role === 'editor') E = V;
+  if (member.role === 'editor') { // their own line: ancestors, descendants, and the spouses of all of them
+    const h = helpers(G), line = new Set([...h.ancestors(member.person), ...h.descendants([member.person])]);
+    E = new Set(); if (G.P[member.person]) line.forEach(x => { E.add(x); h.spouses(x).forEach(sp => E.add(sp)) });
+    E = new Set([...E].filter(x => V.has(x))) }
   else if (member.role === 'family_admin') { const S = familyAdminScope(G, member.person, admins); E = new Set([...S].filter(x => V.has(x))) }
   else E = new Set();
   const out = { people: [], families: [], media: [] };
@@ -193,12 +196,23 @@ Deno.serve(async (req: Request) => {
     if (!member || !['viewer', 'editor', 'family_admin', 'admin'].includes(member.role)) return json({ error: 'Your account has no access yet.' }, 403);
     const body = await req.json().catch(() => ({}));
 
-    if (body.op === 'createUser') { // admins create an account for someone in the tree
-      if (member.role !== 'admin') return json({ error: 'Only admins can create accounts.' }, 403);
+    const [research, rows, members] = await Promise.all([
+      all(sb, 'research', 'prefix,label,ged,updated_at'), all(sb, 'docs', 'coll,id,data'),
+      all(sb, 'members', 'user_id,email,name,person,role,created_at'),
+    ]);
+    const admins = members.filter((x: any) => x.person && ['family_admin', 'admin'].includes(x.role)).map((x: any) => x.person);
+    const docs: any = { people: {}, families: {}, media: {} };
+    rows.forEach((r: any) => { (docs[r.coll] = docs[r.coll] || {})[r.id] = r.data });
+    const view: any = viewFor(member, research, docs, admins);
+
+    if (body.op === 'createUser') { // admins (and family admins, for their own family) create an account for someone in the tree
+      const fa = member.role === 'family_admin';
+      if (member.role !== 'admin' && !fa) return json({ error: 'Only admins and family admins can create accounts.' }, 403);
+      if (fa && !view.E.has(body.person)) return json({ error: 'You can only create accounts for your own family.' }, 403);
       const email = String(body.email || '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Enter a valid email address.' }, 400);
       if (String(body.password || '').length < 8) return json({ error: 'The password needs at least 8 characters.' }, 400);
-      if (!['viewer', 'editor', 'family_admin', 'admin'].includes(body.role)) return json({ error: 'Pick a role.' }, 400);
+      if (!(fa ? ['viewer', 'editor'] : ['viewer', 'editor', 'family_admin', 'admin']).includes(body.role)) return json({ error: 'Pick a role.' }, 400);
       const { data: cu, error: ce } = await sb.auth.admin.createUser({ email, password: body.password, email_confirm: true,
         user_metadata: { name: body.name || '', must_change_password: true } });
       if (ce || !cu || !cu.user) return json({ error: /already/i.test(ce?.message || '') ? 'That email already has an account.' : (ce?.message || 'Could not create the account.') }, 400);
@@ -206,15 +220,20 @@ Deno.serve(async (req: Request) => {
       if (me2) return json({ error: 'Account created, but setting its role failed: ' + me2.message }, 500);
       return json({ ok: true, login: email });
     }
-    const [research, rows, members] = await Promise.all([
-      all(sb, 'research', 'prefix,label,ged,updated_at'), all(sb, 'docs', 'coll,id,data'),
-      all(sb, 'members', 'person,role'),
-    ]);
-    const admins = members.filter((x: any) => x.person && ['family_admin', 'admin'].includes(x.role)).map((x: any) => x.person);
-    const docs: any = { people: {}, families: {}, media: {} };
-    rows.forEach((r: any) => { (docs[r.coll] = docs[r.coll] || {})[r.id] = r.data });
-    const view: any = viewFor(member, research, docs, admins);
-
+    if (body.op === 'pending') { // family admins see who is waiting, to approve their own relatives
+      if (!['family_admin', 'admin'].includes(member.role)) return json({ error: 'Not allowed.' }, 403);
+      return json({ pending: members.filter((m: any) => m.role === 'pending').map((m: any) => ({ user_id: m.user_id, name: m.name, email: m.email, created_at: m.created_at })) });
+    }
+    if (body.op === 'approve') {
+      if (!['family_admin', 'admin'].includes(member.role)) return json({ error: 'Not allowed.' }, 403);
+      const target = members.find((m: any) => m.user_id === body.user_id);
+      if (!target || target.role !== 'pending') return json({ error: 'That sign-up is no longer waiting.' }, 400);
+      if (!['viewer', 'editor'].includes(body.role)) return json({ error: 'Pick a role.' }, 400);
+      if (member.role === 'family_admin' && !view.E.has(body.person)) return json({ error: 'Pick someone in your own family.' }, 403);
+      const { error } = await sb.from('members').update({ role: body.role, person: body.person }).eq('user_id', body.user_id).eq('role', 'pending');
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true });
+    }
     if (body.op === 'write') {
       const seen = new Map(); for (const w of (body.rows || [])) seen.set(w.coll + '|' + w.id, w);
       const ws = [...seen.values()].map((w: any) => w.del ? { coll: w.coll, id: w.id, del: true } : { coll: w.coll, id: w.id, data: w.data });
