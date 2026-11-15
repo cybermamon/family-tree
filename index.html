@@ -426,7 +426,8 @@ function readForm(){const v=i=>document.getElementById(i).value.trim();
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
 function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
-async function flush(){status('Saving…');try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
+async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>last[w[0]+'|'+w[1]]=i);const keep=writes.filter((w,i)=>last[w[0]+'|'+w[1]]===i);writes.length=0;writes.push(...keep)}
+  try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
   while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
   catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
 function submitForm(o){const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
@@ -545,7 +546,7 @@ function showDups(){const box=document.getElementById('dup-list');const ds=findD
   box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
     ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
   const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
-    all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k]&&P[d]){mergeInto(k,d);rebuild()}});render(true);await flush();showDups()};
+    all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k.id]&&P[d.id]){mergeInto(k.id,d.id);rebuild()}});render(true);await flush();showDups()};
   box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)})}
 function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   // relatives: point every family at the kept person
