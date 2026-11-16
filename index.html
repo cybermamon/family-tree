@@ -186,6 +186,10 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 @media print{header,#views .vbar,.zoom,#sheet,.lc-ctl{display:none!important}#views{position:static}#views .vbody{overflow:visible}}
 
 .cl{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px}.cl input{margin-top:3px}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.tcols{display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px 0;padding:8px;border:1px solid var(--line,#8884);border-radius:8px}
+.tscroll{overflow-x:auto;max-width:100%}.etable td{padding:2px 4px}.etable{width:auto}.etable td{white-space:nowrap}.etable input,.etable select{box-sizing:border-box;width:var(--w,120px)!important;min-width:0!important;margin:0!important;font:inherit;font-size:14px!important;padding:5px 6px!important;border:1px solid transparent!important;border-radius:4px;background:transparent!important;color:inherit;height:auto!important}
+.etable select{width:58px!important;padding:5px 2px!important}.etable tr:hover input{border-color:var(--grid)!important}
+.etable input:focus,.etable select:focus{border-color:var(--accent)!important;outline:none;background:var(--panel)!important}.etable td.ro{opacity:.65;font-size:13px;min-width:90px}.etable td.dirty input,.etable td.dirty select{background:rgba(220,170,40,.22)!important}
 </style>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
@@ -898,17 +902,67 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
   if(!V.line&&lines.length)V.line=lines[0][0];
   const fname=P[focusId]?niceName(P[focusId].name):'this person';
-  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button><button class="btn" type="button" data-vt="rel" aria-pressed="${V.tab==='rel'}">Relationship</button></div>
+  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="table" aria-pressed="${V.tab==='table'}">Table</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button><button class="btn" type="button" data-vt="rel" aria-pressed="${V.tab==='rel'}">Relationship</button></div>
     <select id="v-scope" aria-label="Who to include"${V.tab==='line'||V.tab==='rel'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
     <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'&&V.tab!=='rel'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
     ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
+    ${V.tab==='table'?`<input id="t-q" type="search" placeholder="Filter rows" value="${esc(V.tq||'')}">`:''}
     <button class="btn vclose" type="button" id="v-close">Back to tree</button></div><div class="vbody" id="v-body"></div>`;
   box.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>openViews(b.dataset.vt));
   document.getElementById('v-scope').onchange=e=>{V.scope=e.target.value;openViews()};
   document.getElementById('v-line').onchange=e=>{V.line=e.target.value;openViews()};
   const qi=document.getElementById('v-q');if(qi)qi.oninput=()=>{V.q=qi.value;drawList()};
+  const tqi=document.getElementById('t-q');if(tqi)tqi.oninput=()=>{V.tq=tqi.value;drawTable()};
   document.getElementById('v-close').onclick=()=>{box.hidden=true};
-  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else if(V.tab==='rel')drawRel();else drawStats()}
+  if(V.tab==='table')drawTable();else if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else if(V.tab==='rel')drawRel();else drawStats()}
+
+// ---------- table: spreadsheet-style editing ----------
+const TCOLS=[['first','First name',1],['middle','Middle',1],['last','Last name',1],['maiden','Maiden',1],['nick','Nickname',1],['suffix','Suffix',1],['sex','Sex',1],
+  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['notes','Notes',0],['src','Source',0]];
+const TDEF=['first','middle','last','sex','bdate','bplace','ddate','father','mother'];
+V.tdirty=V.tdirty||{};
+function tcols(){try{const c=JSON.parse(localStorage.getItem('ft-tcols')||'null');if(Array.isArray(c)&&c.length)return c}catch(e){}return TDEF}
+function tval(p,k){const nm=nameParts(p),pf=parentsOf(p.id),b=birthOf(p),d=deathOf(p);
+  switch(k){case'first':return nm.given;case'middle':return nm.middle;case'last':return nm.surname;case'suffix':return nm.suffix;case'maiden':return p.maiden||'';case'nick':return p.nick||'';
+    case'sex':return p.sex==='M'?'M':p.sex==='F'?'F':'';case'bdate':return fmtDate(b.date||'');case'bplace':return b.place||'';case'ddate':return fmtDate(d.date||'');case'dplace':return d.place||'';
+    case'father':return pf&&pf.husb&&P[pf.husb]?plateName(P[pf.husb]):'';case'mother':return pf&&pf.wife&&P[pf.wife]?plateName(P[pf.wife]):'';
+    case'spouse':return famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(x=>x&&P[x]).map(x=>plateName(P[x])).join(', ');
+    case'notes':return p.notes.join(' ').slice(0,120);case'src':return p.src||''}return''}
+const gedDate=v=>v.trim().toUpperCase().replace(/^ABOUT\b/,'ABT').replace(/^BEFORE\b/,'BEF').replace(/^AFTER\b/,'AFT').replace(/^EST\.?\b/,'EST');
+function drawTable(){const body=document.getElementById('v-body');const cols=tcols();const C=TCOLS.filter(c=>cols.includes(c[0]));const t=nrm(V.tq||'');
+  const cur=(p,k)=>{const d=V.tdirty[p.id];return d&&k in d?d[k]:tval(p,k)};
+  let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(C.map(c=>cur(p,c[0])).join(' ')+' '+niceName(p.name)).includes(w)));
+  if(V.tblank)ps=ps.filter(p=>C.some(c=>c[2]&&!cur(p,c[0])));
+  const sk=V.tsort||'last',dir=V.tdir||1;const dk=k=>/date$/.test(k);
+  ps.sort((a,b)=>{let x=cur(a,sk),y=cur(b,sk);if(dk(sk)){x=(x.match(/\d{4}/)||['9999'])[0];y=(y.match(/\d{4}/)||['9999'])[0]}else{x=nrm(x)||'~';y=nrm(y)||'~'}
+    if(x===y){x=nrm(cur(a,'last')+' '+cur(a,'first'));y=nrm(cur(b,'last')+' '+cur(b,'first'))}return (x<y?-1:x>y?1:0)*dir});
+  const nd=Object.keys(V.tdirty).length;const shown=ps.slice(0,V.tmax||200);
+  body.innerHTML=`<div class="tbar"><button class="btn" type="button" id="t-colbtn">Columns</button><label class="cl"><input type="checkbox" id="t-blank"${V.tblank?' checked':''}> Only rows with blanks</label>
+     <button class="btn primary" type="button" id="t-save"${nd?'':' disabled'}>${nd?'Save '+nd+' change'+(nd>1?'s':''):'No changes'}</button>${nd?'<button class="btn" type="button" id="t-undo">Discard</button>':''}</div>
+   <div id="t-cols" class="tcols" hidden>${TCOLS.map(c=>`<label class="cl"><input type="checkbox" data-col="${c[0]}"${cols.includes(c[0])?' checked':''}> ${c[1]}</label>`).join('')}</div>
+   <p class="vnote" style="margin:6px 0">${ps.length} ${ps.length===1?'person':'people'}${ps.length>shown.length?`, showing the first ${shown.length}`:''}. Type in a cell to change it; dates like 13 May 1911 or about 1885. Grey cells can't be edited here.</p>
+   <div class="tscroll"><table class="ptable etable"><thead><tr>${C.map(c=>`<th data-tsort="${c[0]}">${c[1]}${sk===c[0]?(dir>0?' ▲':' ▼'):''}</th>`).join('')}<th></th></tr></thead><tbody>
+   ${shown.map(p=>{const ed=canEditP(p.id);return`<tr data-id="${esc(p.id)}">${C.map(c=>{const v=cur(p,c[0]),dirty=V.tdirty[p.id]&&c[0] in V.tdirty[p.id];
+     if(!c[2]||!ed)return`<td class="ro">${esc(v)}</td>`;
+     if(c[0]==='sex')return`<td${dirty?' class="dirty"':''}><select data-k="sex"><option value=""${!v?' selected':''}>?</option><option value="M"${v==='M'?' selected':''}>M</option><option value="F"${v==='F'?' selected':''}>F</option></select></td>`;
+     return`<td${dirty?' class="dirty"':''}><input data-k="${c[0]}" value="${esc(v)}" autocomplete="off" style="--w:${({bplace:190,dplace:190,bdate:130,ddate:130,middle:100,suffix:60,nick:100})[c[0]]||120}px"></td>`}).join('')}<td><button type="button" class="lnk" data-tgo="${esc(p.id)}">View</button></td></tr>`}).join('')}</tbody></table></div>
+   ${ps.length>shown.length?'<div class="acts"><button class="btn" type="button" id="t-more">Show more</button></div>':''}`;
+  body.querySelectorAll('th[data-tsort]').forEach(h=>h.onclick=()=>{const k=h.dataset.tsort;if(V.tsort===k)V.tdir=-(V.tdir||1);else{V.tsort=k;V.tdir=1}drawTable()});
+  body.querySelectorAll('[data-k]').forEach(el=>{const ev=el.tagName==='SELECT'?'change':'input';el.addEventListener(ev,()=>{const id=el.closest('tr').dataset.id,k=el.dataset.k,p=P[id];
+    const orig=tval(p,k);const d=V.tdirty[id]=V.tdirty[id]||{};if(el.value===orig)delete d[k];else d[k]=el.value;if(!Object.keys(d).length)delete V.tdirty[id];
+    el.closest('td').classList.toggle('dirty',k in (V.tdirty[id]||{}));const n=Object.keys(V.tdirty).length,sv=document.getElementById('t-save');sv.disabled=!n;sv.textContent=n?'Save '+n+' change'+(n>1?'s':''):'No changes'})});
+  body.querySelectorAll('[data-tgo]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.tgo)});
+  document.getElementById('t-colbtn').onclick=()=>{const c=document.getElementById('t-cols');c.hidden=!c.hidden};
+  body.querySelectorAll('[data-col]').forEach(cb=>cb.onchange=()=>{const sel=[...body.querySelectorAll('[data-col]:checked')].map(x=>x.dataset.col);try{localStorage.setItem('ft-tcols',JSON.stringify(sel.length?sel:TDEF))}catch(e){}drawTable();document.getElementById('t-cols').hidden=false});
+  document.getElementById('t-blank').onchange=e=>{V.tblank=e.target.checked;drawTable()};
+  const more=document.getElementById('t-more');if(more)more.onclick=()=>{V.tmax=(V.tmax||200)+200;drawTable()};
+  const und=document.getElementById('t-undo');if(und)und.onclick=()=>{V.tdirty={};drawTable()};
+  document.getElementById('t-save').onclick=async()=>{const sv=document.getElementById('t-save');sv.disabled=true;sv.textContent='Saving…';let n=0;
+    for(const id in V.tdirty){const p=P[id];if(!p||!canEditP(id))continue;const d=V.tdirty[id],g=k=>k in d?d[k]:tval(p,k);
+      const o=Object.assign({},OV_P[id]||personDoc(p));const first=g('first').trim(),mid=g('middle').trim(),last=g('last').trim(),suf=g('suffix').trim();
+      o.name=`${first}${mid?' '+mid:''} /${last}/${suf?' '+suf:''}`.trim();o.middle=mid;o.maiden=g('maiden').trim();o.nick=g('nick').trim();o.sex=g('sex')||'U';
+      o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();queue('people',id,o);n++}
+    V.tdirty={};rebuild();render(true);await flush();drawTable();body.insertAdjacentHTML('afterbegin',`<p class="vnote"><strong>Saved ${n} ${n===1?'person':'people'}.</strong> Changes show in History.</p>`)}}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
   let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
   const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
