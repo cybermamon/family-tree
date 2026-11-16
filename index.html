@@ -654,13 +654,16 @@ document.getElementById('export').onclick=openExport;
 
 // ---------- duplicates ----------
 function findDups(){ // same person entered twice: first and last name match, the shorter name fits inside the longer, birth years agree or one is blank
-  const W=p=>nrm(niceName(p.name)).split(' ').filter(Boolean);const g={};
+  // sound-alike spelling: Vasquez/Vazquez/Basques, Ysidro/Isidro, Bregida/Brigida
+  const ph=w=>w.replace(/qu/g,'k').replace(/c(?=[ei])/g,'s').replace(/c/g,'k').replace(/z/g,'s').replace(/v/g,'b').replace(/y/g,'i').replace(/h/g,'').replace(/(.)\1+/g,'$1').replace(/e/g,'i').replace(/o(?=$)/,'u').replace(/s$/,'')||w;
+  const PN=n=>nrm(niceName(n)).split(' ').filter(Boolean).map(ph).join(' ');
+  const W=p=>PN(p.name).split(' ').filter(Boolean);const g={};
   Object.values(P).forEach(p=>{const w=W(p);if(w.length<2||w.includes('unknown'))return;const k=w[0]+'|'+w[w.length-1];(g[k]=g[k]||[]).push(p)});
   const pre=p=>p.id.split(':')[0];
-  const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>nrm(niceName(P[x].name))).sort().join('+'):''};
+  const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>PN(P[x].name)).sort().join('+'):''};
   const sps=p=>famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean);
   const kin=p=>{const f=parentsOf(p.id);return new Set([...(f?[f.husb,f.wife]:[]),...sps(p),...famsOf(p.id).flatMap(x=>x.chil)].filter(Boolean))};
-  const spN=p=>new Set(sps(p).map(x=>nrm(niceName(P[x].name))));
+  const spN=p=>new Set(sps(p).map(x=>PN(P[x].name)));
   const fits=(x,y)=>{const a=W(x),b=W(y);const[s,l]=a.length<=b.length?[a,b]:[b,a];return s.every(w=>l.includes(w))};
   const parFit=(x,y)=>{const a=parNames(x),b=parNames(y);if(!a||!b||a===b)return true;const fx=parentsOf(x.id),fy=parentsOf(y.id);return fx===fy};
   const parIds=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean):[]};
@@ -668,10 +671,11 @@ function findDups(){ // same person entered twice: first and last name match, th
   // strong evidence: same name and they share a parent, a spouse or a child (the same record imported twice)
   const shares=(x,y)=>parIds(x).some(z=>parIds(y).includes(z))||sps(x).some(z=>sps(y).includes(z))||kidIds(x).some(z=>kidIds(y).includes(z));
   const strong=(x,y)=>fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&shares(x,y)&&!kin(x).has(y.id)&&!kin(y).has(x.id);
-  const same=(x,y)=>strong(x,y)||!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
+  const sexOk=(x,y)=>!(x.sex&&y.sex&&x.sex!=='U'&&y.sex!=='U'&&x.sex!==y.sex);
+  const same=(x,y)=>sexOk(x,y)&&(strong(x,y)||!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
     &&!kin(x).has(y.id)&&!kin(y).has(x.id)
     &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
-    &&!crossed(x,y)&&!crossed(y,x);
+    &&!crossed(x,y)&&!crossed(y,x));
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
   const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
