@@ -1105,9 +1105,9 @@ $('#authcard').addEventListener('click',async e=>{const b=e.target.closest('butt
   screen(s)});
 async function submit(kind){const v=id=>{const el=$('#'+id);return el?el.value.trim():''};const btn=$('#af .go');btn.disabled=true;say('Please wait…');
   try{
-    if(kind==='signin'){const{error}=await sb.auth.signInWithPassword({email:v('a-email'),password:$('#a-pass').value});if(error)throw error;await start()}
+    if(kind==='signin'){const{error}=await sb.auth.signInWithPassword({email:v('a-email'),password:$('#a-pass').value});if(error)throw error;loginKind='sign-in';await start()}
     else if(kind==='signup'){const{data,error}=await sb.auth.signUp({email:v('a-email'),password:$('#a-pass').value,options:{data:{name:v('a-name')},emailRedirectTo:here}});if(error)throw error;
-      if(data.session)await start();else screen('signin',{text:'Check your email to confirm your account, then sign in.'})}
+      if(data.session){loginKind='sign-in';await start()}else screen('signin',{text:'Check your email to confirm your account, then sign in.'})}
     else if(kind==='forgot'){const{error}=await sb.auth.resetPasswordForEmail(v('a-email'),{redirectTo:here});if(error)throw error;say('If that email has an account, a reset link is on its way.')}
     else if(kind==='newpass'){const{error}=await sb.auth.updateUser({password:$('#a-pass').value,data:{must_change_password:false}});if(error)throw error;history.replaceState(null,'',here);await start()}
   }catch(err){say(friendly(err),true)}finally{if(btn)btn.disabled=false}}
@@ -1118,7 +1118,13 @@ function friendly(e){const m=(e&&e.message)||'Something went wrong.';
   return m}
 
 // ---------- start ----------
-let recovering=false;
+let recovering=false,loginKind=null;
+function deviceName(){const u=navigator.userAgent;const os=/iPhone/.test(u)?'iPhone':/iPad/.test(u)?'iPad':/Android/.test(u)?'Android':/Mac OS X/.test(u)?'Mac':/Windows/.test(u)?'Windows':/Linux/.test(u)?'Linux':'Other';
+  const br=/Edg\//.test(u)?'Edge':/CriOS|Chrome\//.test(u)?'Chrome':/FxiOS|Firefox\//.test(u)?'Firefox':/Safari\//.test(u)?'Safari':'Browser';return br+' on '+os}
+function logLogin(){let kind=loginKind;loginKind=null;
+  if(!kind){try{if(sessionStorage.getItem('ft-visit'))return;}catch(e){}kind='visit'}
+  try{sessionStorage.setItem('ft-visit','1')}catch(e){}
+  try{Promise.resolve(sb.from('logins').insert({user_id:me.id,email:me.email,kind,device:deviceName()})).catch(()=>{})}catch(e){}}
 sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovering=true;screen('newpass')}});
 async function start(){
   if(recovering)return;
@@ -1130,6 +1136,7 @@ async function start(){
   if(error&&!/network|fetch/i.test(error.message||''))({data:m,error}=await sb.from('members').select('role,name').eq('user_id',me.id).maybeSingle()); // before the family-admin SQL step
   if(error){screen('signin',{text:'Could not reach the tree. Check your connection and try again.',err:true});return}
   role=m&&m.role;if(m&&m.name)myName=m.name;
+  if(!booted)logLogin();
   if(role==='blocked'){screen('blocked');return}
   if(!role||role==='pending'){screen('pending');return}
   if(booted){$('#auth').hidden=true;return}
@@ -1269,7 +1276,8 @@ async function openMembers(){
    <select data-uid="${m.user_id}" aria-label="Access for ${esc(m.name||m.email)}" ${m.user_id===me.id?'disabled':''}>${roles.map(([v,l])=>`<option value="${v}"${v===m.role?' selected':''}>${l}</option>`).join('')}</select>
    ${hasPerson?`<div class="plink"><small>Profile in tree: <span data-plabel="${m.user_id}">${esc(m.person?((window.__personLabel&&window.__personLabel(m.person))||'not found, link again'):'not linked')}</span></small> <button type="button" class="lnk" data-plink="${m.user_id}">${m.person?'Change':'Link'}</button>
    <div class="psearch" data-pbox="${m.user_id}" hidden><input type="search" placeholder="Search the tree by name" autocomplete="off"><div class="pres"></div></div></div>`:''}</div>`).join('')}
-   <p class="msg" id="mmsg"></p><div class="links"><span></span><button type="button" id="mclose">Close</button></div></div>`;
+   <p class="msg" id="mmsg"></p><div class="links"><button type="button" id="mlogins">Sign-in history</button><button type="button" id="mclose">Close</button></div></div>`;
+  $('#mlogins').onclick=openLogins;
   $('#mclose').onclick=()=>{box.hidden=true;const b=[...document.querySelectorAll('header .btn')].find(x=>/^Members/.test(x.textContent));if(b)refreshPendingBadge(b)};
   box.querySelectorAll('select[data-uid]').forEach(sel=>sel.onchange=async()=>{const{error}=await sb.from('members').update({role:sel.value}).eq('user_id',sel.dataset.uid);
     $('#mmsg').textContent=error?'Not saved: '+error.message:'Saved.';sel.closest('.mrow').classList.toggle('pending',sel.value==='pending')});
@@ -1317,6 +1325,16 @@ async function openResearch(empty){
     if(error){$('#rmsg').textContent='Not uploaded: '+error.message+(/row-level/i.test(error.message)?' (run the extra SQL step first)':'');return}
     $('#rmsg').textContent='Uploaded. Reloading…';setTimeout(()=>location.reload(),800)};
 }
+async function openLogins(){
+  const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>Sign-in history</h1><p class="lede">Loading…</p></div>';
+  const[{data:ls,error},{data:ms}]=await Promise.all([sb.from('logins').select('*').order('at',{ascending:false}).limit(300),sb.from('members').select('user_id,name,email')]);
+  if(error){box.querySelector('.lede').textContent=/logins|relation|schema cache/i.test(error.message)?'Sign-in history isn’t set up yet. Run login-log.sql in Supabase first.':error.message;return}
+  const who={};(ms||[]).forEach(m=>who[m.user_id]=m.name||m.email);
+  const fmt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  box.innerHTML=`<div class="card"><h1>Sign-in history</h1><p class="lede">The latest 300 sign-ins and visits. A visit is opening the site while already signed in.</p>
+   ${ls.length?ls.map(l=>`<div class="mrow"><div class="who"><strong>${esc(who[l.user_id]||l.email||'Unknown')}</strong><small>${l.kind==='sign-in'?'Signed in':'Visited'} · ${fmt(l.at)} · ${esc(l.device||'')}</small></div><span></span></div>`).join(''):'<p class="lede">No sign-ins recorded yet.</p>'}
+   <div class="links"><button type="button" id="lback">Back to members</button><button type="button" id="lclose">Close</button></div></div>`;
+  $('#lback').onclick=openMembers;$('#lclose').onclick=()=>box.hidden=true}
 async function openHistory(){
   const box=$('#members');box.hidden=false;box.innerHTML='<div class="card"><h1>History</h1><p class="lede">Loading…</p></div>';
   const[{data:hs,error},{data:ms}]=await Promise.all([sb.from('history').select('*').order('at',{ascending:false}).limit(200),sb.from('members').select('user_id,name,email')]);
