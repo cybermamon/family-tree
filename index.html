@@ -673,14 +673,22 @@ function findDups(){ // same person entered twice: first and last name match, th
   const shares=(x,y)=>parIds(x).some(z=>parIds(y).includes(z))||sps(x).some(z=>sps(y).includes(z))||kidIds(x).some(z=>kidIds(y).includes(z));
   const strong=(x,y)=>fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&shares(x,y)&&!kin(x).has(y.id)&&!kin(y).has(x.id);
   const sexOk=(x,y)=>!(x.sex&&y.sex&&x.sex!=='U'&&y.sex!=='U'&&x.sex!==y.sex);
-  const same=(x,y)=>sexOk(x,y)&&(strong(x,y)||!(pre(x)===pre(y)&&pre(x)!=='N')&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
+  const same=(x,y)=>sexOk(x,y)&&(strong(x,y)||!(pre(x)===pre(y)&&(pre(x)==='S'||pre(x)==='A'))&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
     &&!kin(x).has(y.id)&&!kin(y).has(x.id)
     &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
-    &&!crossed(x,y)&&!crossed(y,x));
+    &&!crossed(x,y)&&!crossed(y,x)&&!wedKin(x,y)&&!wedKin(y,x));
+  // y is married to x's brother, uncle, parent or grandparent: two different people with the same name
+  function wedKin(x,y){const up1=parIds(x),up2=up1.flatMap(z=>parIds(P[z]||{id:''}));const near=new Set([...up1,...up2]);
+    [...up1,...up2].forEach(z=>famsOf(z).forEach(f=>f.chil.forEach(c=>near.add(c))));near.delete(x.id);return sps(y).some(z=>near.has(z))}
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
   const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
+  const seenPair=new Set(out.map(([a,b])=>[a.id,b.id].sort().join('|')));
+  Object.values(P).forEach(sp=>{const ws=sps(sp).map(id=>P[id]).filter(Boolean);
+    for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){let a=ws[i],b=ws[j];const k=[a.id,b.id].sort().join('|');if(seenPair.has(k)||a.id===b.id)continue;
+      if(W(a)[0]!==W(b)[0]||!sexOk(a,b)||(by(a)&&by(b)&&by(a)!==by(b)))continue;
+      if(score(b)>score(a))[a,b]=[b,a];if(canEditP(a.id)&&canEditP(b.id)){seenPair.add(k);out.push([a,b])}}});
   return out}
 function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
   const sp=famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean).map(x=>niceName(P[x].name));
@@ -722,11 +730,25 @@ function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(r
   // 4. people linked to nobody
   Object.values(P).forEach(p=>{if(p.famc.length||p.fams.length||!canEditP(p.id))return;const blank=!birthOf(p).date&&!deathOf(p).date&&!p.notes.length&&!mediaOf(p.id).length;
     out.alone.push({label:niceName(p.name)+(years(p)?' ('+years(p)+')':'')+' · '+p.src+(blank?' · no details':''),pre:/^unknown$/i.test(niceName(p.name))&&blank,id:p.id,fix:()=>queue('people',p.id,Object.assign({},OV_P[p.id]||{},{deleted:true}))})});
+  // 5. names typed in lower case or ALL CAPS, and notes typed into the name
+  const PART=/^(de|del|dela|los|las|la|y|van|von|da|di)$/i,ROM=/^(ii|iii|iv|v|vi|jr\.?|sr\.?)$/i;
+  const tc=w=>w.split('-').map(x=>{if(!x)return x;if(ROM.test(x))return /^j|^s/i.test(x)?x[0].toUpperCase()+x.slice(1).toLowerCase():x.toUpperCase();
+    return x.charAt(0).toUpperCase()+x.slice(1).toLowerCase()}).join('-');
+  const fixName=n=>{let i=0;return n.replace(/[^\s/]+/g,w=>{const first=i++===0;if(!first&&PART.test(w)&&w===w.toLowerCase())return w;
+    return w.split('-').map(x=>{const letters=x.replace(/[^A-Za-zÀ-ÿ]/g,'');if(letters.length<2||ROM.test(x)&&x===x.toUpperCase())return x;
+      if(x===x.toLowerCase()||(x===x.toUpperCase()&&letters.length>=3))return tc(x);return x}).join('-')})};
+  out.caps=[];Object.values(P).forEach(p=>{if(!canEditP(p.id))return;const paren=(p.name.match(/\s*\(([^)]*)\)\s*/)||[]);let n=p.name;const extra=[];
+    if(paren[0]){n=n.replace(paren[0],' ').replace(/\s+/g,' ').trim();extra.push(paren[1])}
+    const n2=fixName(n);if(n2===p.name)return;
+    out.caps.push({label:niceName(p.name)+' → '+niceName(n2)+(extra.length?' (moves “'+extra[0]+'” to notes)':''),fix:()=>{const o=Object.assign({},OV_P[p.id]||personDoc(p));o.name=n2;
+      if(extra.length)o.note=[o.note||'',...extra.map(x=>x.charAt(0).toUpperCase()+x.slice(1)+'.')].filter(Boolean).join('\n\n');queue('people',p.id,o)}})});
   return out}
+function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:p.notes.join('\n\n')}}
 function showClean(){const box=document.getElementById('dup-list');const A=auditData();
   const S=[['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
     ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
     ['empty','Family links with fewer than two people','These do nothing in the tree and are removed.',true],
+    ['caps','Names in lower case or ALL CAPS','Each name is changed to normal capitals. Words like de, los and y stay lower case. Anything in brackets moves to the notes.',true],
     ['alone','People not linked to anyone','Only ticked people are removed. Check each one first; you may prefer to link them instead.',false]];
   const nDup=findDups().length;const total=S.reduce((n,[k])=>n+A[k].length,0);
   box.innerHTML=`<p class="sub">${total?'Tick what to fix, then tap Fix selected. Every fix shows in History and can be undone there.':'No problems found in the stored data.'}${nDup?` There are also ${nDup} possible duplicate people: use Find duplicates for those.`:''}</p>`+
