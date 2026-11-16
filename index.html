@@ -506,6 +506,7 @@ function openForm(o){
    <label>Notes<textarea id="ed-note" rows="4">${esc(p?p.notes.join('\n\n'):'')}</textarea></label>
    <div class="acts"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-back="${o.mode==='edit'?o.id:o.anchor}">Cancel</button>
    ${o.mode==='edit'?`<button class="btn danger" type="button" data-del="${o.id}">Delete person</button>`:''}</div>
+   ${o.mode==='edit'?marrSection(o.id):''}
    ${o.mode==='edit'?relSection(o.id):''}
    ${o.mode==='edit'?`<div class="exist"><label>Same person entered twice? Find the other copy<input id="ed-merge" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-mres" hidden></div></div><div id="ed-mpick" class="hint" hidden></div>`:''}
    <p class="hint">Dates use GEDCOM style: 3 APR 1949, ABT 1913, BEF 1900.</p>
@@ -546,7 +547,10 @@ async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>
   catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
 function submitForm(o){if(!canEditP(o.mode==='edit'?o.id:o.anchor)){status('Another family admin manages this person',true);return}const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
   let pid=o.id;
-  if(o.mode==='edit'){queue('people',pid,data)}
+  if(o.mode==='edit'){queue('people',pid,data);
+    document.querySelectorAll('[data-mdate]').forEach(inp=>{const fid=inp.dataset.mdate,f0=F[fid];if(!f0)return;const pl=document.querySelector(`[data-mplace="${CSS.escape(fid)}"]`);
+      const m=f0.ev.MARR||{},d=inp.value.trim().toUpperCase().replace(/^ABOUT\b/,'ABT').replace(/^BEFORE\b/,'BEF').replace(/^AFTER\b/,'AFT'),plc=pl?pl.value.trim():'';
+      if(nrm(d)===nrm(m.date||'')&&plc===(m.place||''))return;const f=JSON.parse(JSON.stringify(f0));f.ev.MARR={date:d,place:plc};queue('families',fid,famData(f))})}
   else{const a=o.anchor,as=P[a].sex;
     if(o.existing){pid=o.existing;
       const already=(o.rel==='spouse'&&famsOf(a).some(f=>spouseIn(f,a)===pid))||(o.rel==='child'&&famsOf(a).some(f=>f.chil.includes(pid)))||((o.rel==='father'||o.rel==='mother'||o.rel==='sibling')&&parentsOf(a)&&[parentsOf(a).husb,parentsOf(a).wife].concat(parentsOf(a).chil).includes(pid));
@@ -561,6 +565,9 @@ function submitForm(o){if(!canEditP(o.mode==='edit'?o.id:o.anchor)){status('Anot
   }
   rebuild();render(true);openSheet(pid);flush()}
 // ---------- remove a relationship (wrong parent, spouse or child link) ----------
+function marrSection(id){const p=P[id];if(!p)return'';const fs=p.fams.map(x=>F[x]).filter(f=>f&&spouseIn(f,id));if(!fs.length)return'';
+  return`<h3 class="sect">Marriage</h3>${fs.map(f=>{const m=f.ev.MARR||{};return`<div class="mar"><div class="sub">With ${esc(plateName(P[spouseIn(f,id)]))}</div>
+   <div class="two"><label>Date<input data-mdate="${esc(f.id)}" value="${esc(fmtDate(m.date||''))}" placeholder="e.g. 13 May 1911" autocomplete="off"></label><label>Place<input data-mplace="${esc(f.id)}" value="${esc(m.place||'')}" autocomplete="off"></label></div></div>`}).join('')}`}
 function relSection(id){const p=P[id];if(!p)return'';const nm=x=>esc(plateName(P[x]));const rows=[];
   p.famc.forEach(fid=>{const f=F[fid];if(!f)return;const ps=[f.husb,f.wife].filter(Boolean);rows.push([`Child of ${ps.length?ps.map(nm).join(' & '):'unknown parents'}`,`c|${fid}|${id}`])});
   p.fams.forEach(fid=>{const f=F[fid];if(!f)return;const sp=spouseIn(f,id);if(sp)rows.push([`Spouse: ${nm(sp)}`,`s|${fid}|${sp}`]);f.chil.forEach(k=>rows.push([`Child: ${nm(k)}`,`k|${fid}|${k}`]))});
