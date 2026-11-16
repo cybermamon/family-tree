@@ -185,6 +185,7 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 @media (max-width:700px){.lc-row{grid-template-columns:26px 1fr}.lc-rem{grid-column:2;margin-top:-4px;margin-bottom:4px}.lc-link{width:calc(100% - 38px);margin-left:38px}}
 @media print{header,#views .vbar,.zoom,#sheet,.lc-ctl{display:none!important}#views{position:static}#views .vbody{overflow:visible}}
 
+.cl{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px}.cl input{margin-top:3px}
 </style>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
@@ -640,8 +641,8 @@ function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type
   ${canEdit()?`${limited()?'':`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
   <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>`}
   <h3 class="sect">Duplicates</h3><p class="sub">Find people who appear twice (same name and birth year) and merge them into one.</p>
-  <div class="acts"><button class="btn" type="button" id="dup-find">Find duplicates</button></div><div id="dup-list"></div>`:''}`;sheet.hidden=false;
-  const df=document.getElementById('dup-find');if(df)df.onclick=showDups;
+  <div class="acts"><button class="btn" type="button" id="dup-find">Find duplicates</button><button class="btn" type="button" id="clean-find">Check and clean up</button></div><div id="dup-list"></div>`:''}`;sheet.hidden=false;
+  const df=document.getElementById('dup-find');if(df)df.onclick=showDups;const cf=document.getElementById('clean-find');if(cf)cf.onclick=showClean;
   const ip=document.getElementById('im-pick');if(ip)ip.onclick=()=>document.getElementById('gedpick').click();
   const msg=t=>document.getElementById('ex-msg').textContent=t;
   const sv=document.getElementById('ex-save');if(sv)sv.onclick=async()=>{const g=toGed();
@@ -694,6 +695,48 @@ function showDups(){const box=document.getElementById('dup-list');const ds=findD
   const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
     all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k.id]&&P[d.id]){mergeInto(k.id,d.id);rebuild()}});render(true);await flush();showDups()};
   box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)})}
+
+// ---------- clean-up check: problems in the stored data, each fixed only after the admin ticks it ----------
+function rawFam(id){const o=OV_F[id];if(o)return o.deleted?null:{id,husb:o.husb||null,wife:o.wife||null,chil:(o.chil||[]).slice(),ev:(o.marrDate||o.marrPlace)?{MARR:{date:o.marrDate||'',place:o.marrPlace||''}}:{}};
+  const b=BASE_F[id];return b?JSON.parse(JSON.stringify(b)):null}
+function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(rawFam).filter(Boolean).map(f=>Object.assign(f,{husb:P[f.husb]?f.husb:null,wife:P[f.wife]?f.wife:null,chil:f.chil.filter(c=>P[c])}));
+  const nm=id=>id&&P[id]?niceName(P[id].name):'?';const can=f=>[f.husb,f.wife,...f.chil].filter(Boolean).some(canEditP);
+  const out={couple:[],twice:[],empty:[],alone:[]};
+  // 1. the same couple stored as two or more families
+  const byCouple={};fams.forEach(f=>{if(f.husb&&f.wife){const k=[f.husb,f.wife].sort().join('|');(byCouple[k]=byCouple[k]||[]).push(f)}});
+  Object.values(byCouple).forEach(a=>{if(a.length>1&&can(a[0])){a.sort((x,y)=>(y.chil.length+(y.ev.MARR?1:0))-(x.chil.length+(x.ev.MARR?1:0)));
+    out.couple.push({label:nm(a[0].husb)+' + '+nm(a[0].wife)+': stored '+a.length+' times',fix:()=>{const k=a[0],ch=[...new Set(a.flatMap(f=>f.chil))],m=a.map(f=>f.ev.MARR).filter(Boolean)[0];
+      queue('families',k.id,famData({id:k.id,husb:k.husb,wife:k.wife,chil:ch,ev:m?{MARR:m}:{}}));a.slice(1).forEach(f=>queue('families',f.id,Object.assign(famData(f),{deleted:true})))}})}});
+  const dupCouple=new Set(Object.values(byCouple).filter(a=>a.length>1).flat().map(f=>f.id));
+  // 2. a child listed twice, or under a family that has only part of the parents of another family that also lists them
+  fams.forEach(f=>{if(dupCouple.has(f.id))return;const seen=new Set();const rep=f.chil.filter(c=>{if(seen.has(c))return true;seen.add(c);return false});
+    const pa=[f.husb,f.wife].filter(Boolean);
+    const extra=[...seen].filter(c=>fams.some(g=>g!==f&&g.chil.includes(c)&&pa.every(x=>[g.husb,g.wife].includes(x))&&[g.husb,g.wife].filter(Boolean).length>pa.length));
+    const drop=[...new Set(rep.concat(extra))];if(!drop.length||!can(f))return;
+    out.twice.push({label:drop.map(nm).join(', ')+(extra.length?' also listed under '+(pa.length?'only '+pa.map(nm).join(' + '):'a family with no parents'):' listed twice under '+pa.map(nm).join(' + ')),
+      fix:()=>{const c=[...new Set(f.chil.filter(x=>!extra.includes(x)))];const ff=Object.assign({},f,{chil:c});
+        queue('families',f.id,[f.husb,f.wife,...c].filter(Boolean).length<2?Object.assign(famData(ff),{deleted:true}):famData(ff))}})});
+  // 3. families with fewer than two people
+  fams.forEach(f=>{const m=[f.husb,f.wife,...f.chil].filter(Boolean);if(m.length>=2)return;if(m.length&&!can(f))return;
+    out.empty.push({label:m.length?'A family link with only '+nm(m[0])+' in it':'An empty family link',fix:()=>queue('families',f.id,Object.assign(famData(f),{deleted:true}))})});
+  // 4. people linked to nobody
+  Object.values(P).forEach(p=>{if(p.famc.length||p.fams.length||!canEditP(p.id))return;const blank=!birthOf(p).date&&!deathOf(p).date&&!p.notes.length&&!mediaOf(p.id).length;
+    out.alone.push({label:niceName(p.name)+(years(p)?' ('+years(p)+')':'')+' · '+p.src+(blank?' · no details':''),pre:/^unknown$/i.test(niceName(p.name))&&blank,id:p.id,fix:()=>queue('people',p.id,Object.assign({},OV_P[p.id]||{},{deleted:true}))})});
+  return out}
+function showClean(){const box=document.getElementById('dup-list');const A=auditData();
+  const S=[['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
+    ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
+    ['empty','Family links with fewer than two people','These do nothing in the tree and are removed.',true],
+    ['alone','People not linked to anyone','Only ticked people are removed. Check each one first; you may prefer to link them instead.',false]];
+  const nDup=findDups().length;const total=S.reduce((n,[k])=>n+A[k].length,0);
+  box.innerHTML=`<p class="sub">${total?'Tick what to fix, then tap Fix selected. Every fix shows in History and can be undone there.':'No problems found in the stored data.'}${nDup?` There are also ${nDup} possible duplicate people: use Find duplicates for those.`:''}</p>`+
+    S.filter(([k])=>A[k].length).map(([k,t,d,on])=>`<div class="dup"><strong>${t} (${A[k].length})</strong><small>${d}</small>
+      ${A[k].map((it,i)=>`<label class="cl"><input type="checkbox" data-ck="${k}:${i}"${on||it.pre?' checked':''}> ${esc(it.label)}${it.id?` <button type="button" class="lnk" data-show="${esc(it.id)}">View</button>`:''}</label>`).join('')}</div>`).join('')+
+    (total?'<div class="acts"><button class="btn primary" type="button" id="clean-go">Fix selected</button></div>':'');
+  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=e=>{e.preventDefault();setFocus(b.dataset.show)});
+  const go=document.getElementById('clean-go');if(go)go.onclick=async()=>{const sel=[...box.querySelectorAll('[data-ck]:checked')].map(c=>c.dataset.ck.split(':'));if(!sel.length)return;
+    go.disabled=true;go.textContent='Fixing…';sel.forEach(([k,i])=>A[k][+i].fix());rebuild();render(true);await flush();showClean();
+    box.insertAdjacentHTML('afterbegin',`<p class="sub"><strong>Fixed ${sel.length} item${sel.length>1?'s':''}.</strong></p>`)}}
 function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   // relatives: point every family at the kept person
   const touched={};
