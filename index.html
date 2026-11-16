@@ -151,6 +151,23 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .cols .c:hover{opacity:.8}
 .colx{display:flex;gap:2px;font-size:11px;color:var(--muted);margin-top:4px}.colx span{flex:1;min-width:0;white-space:nowrap;overflow:visible}
 .vnote{color:var(--muted);font-size:12px;margin:14px 0 0}
+
+.rl-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;max-width:760px}
+.rl-pick .exist{position:relative}.rl-pick label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.rl-pick .results{position:absolute;left:0;right:0;top:100%;z-index:3;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:260px;overflow:auto}
+.rl-pick .results button{display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid var(--grid);background:none;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.rl-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;max-width:760px}
+.rl-card h3{margin:0 0 4px;font-family:var(--font-display);font-size:19px}
+.rl-card .why{font-size:13px;color:var(--muted);margin:0 0 10px}
+.rl-tree{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.rl-top{grid-column:1/-1;justify-self:center;text-align:center}
+.rl-col{display:flex;flex-direction:column;align-items:center;gap:0}
+.rl-chip{all:unset;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;text-align:center;max-width:100%}
+.rl-chip.end{border:2px solid var(--accent);font-weight:600}
+.rl-chip small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.rl-arrow{color:var(--muted);font-size:12px;line-height:1;padding:3px 0}
+.rl-steps{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+@media (max-width:600px){.rl-pick{grid-template-columns:1fr}}
 .lc-wrap{max-width:1000px;margin:0 auto}
 .lc-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
 .lc-row{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,.8fr);gap:12px;align-items:center}
@@ -773,7 +790,7 @@ const surnameOf=p=>splitName(p.name).surname.trim();
 const firstOf=p=>(splitName(p.name).given.split(/\s+/)[0]||'').replace(/[^\p{L}.'-]/gu,'');
 const townOf=pl=>(pl||'').split(',')[0].trim();
 const bplace=p=>(p.ev.BIRT&&p.ev.BIRT.place)||(p.ev.CHR&&p.ev.CHR.place)||(p.ev.BAPM&&p.ev.BAPM.place)||'';
-let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false,lineTo:'father'};
+let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false,lineTo:'father',relA:null,relB:null};
 function scopePeople(){const all=Object.values(P);
   if(V.scope==='anc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);const f=parentsOf(x);if(f)st.push(f.husb,f.wife)}return all.filter(p=>s.has(p.id))}
   if(V.scope==='desc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);famsOf(x).forEach(f=>{st.push(...f.chil);const sp=spouseIn(f,x);if(sp)s.add(sp)})}return all.filter(p=>s.has(p.id))}
@@ -784,9 +801,9 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
   if(!V.line&&lines.length)V.line=lines[0][0];
   const fname=P[focusId]?niceName(P[focusId].name):'this person';
-  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button></div>
-    <select id="v-scope" aria-label="Who to include"${V.tab==='line'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
-    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
+  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button><button class="btn" type="button" data-vt="rel" aria-pressed="${V.tab==='rel'}">Relationship</button></div>
+    <select id="v-scope" aria-label="Who to include"${V.tab==='line'||V.tab==='rel'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
+    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'&&V.tab!=='rel'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
     ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
     <button class="btn vclose" type="button" id="v-close">Back to tree</button></div><div class="vbody" id="v-body"></div>`;
   box.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>openViews(b.dataset.vt));
@@ -794,7 +811,7 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   document.getElementById('v-line').onchange=e=>{V.line=e.target.value;openViews()};
   const qi=document.getElementById('v-q');if(qi)qi.oninput=()=>{V.q=qi.value;drawList()};
   document.getElementById('v-close').onclick=()=>{box.hidden=true};
-  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else drawStats()}
+  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else if(V.tab==='rel')drawRel();else drawStats()}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
   let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
   const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
@@ -905,6 +922,68 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
   document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;drawLine()};
   document.getElementById('lc-print').onclick=()=>window.print();
   body.querySelectorAll('[data-go-line]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goLine)})}
+
+// ---------- how two people are related ----------
+function upMap(id){const m=new Map([[id,{d:0,down:null}]]);const q=[id];
+  while(q.length){const x=q.shift();const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!m.has(y)){m.set(y,{d:m.get(x).d+1,down:x});q.push(y)}})}return m}
+const ORD=['','','grand','great-grand'];
+function greats(n){return n<=0?'':(n===1?'great-':n===2?'great-great-':n+'× great-')}
+const nth=n=>n+(n%10===1&&n%100!==11?'st':n%10===2&&n%100!==12?'nd':n%10===3&&n%100!==13?'rd':'th');
+const times=n=>n===1?'once':n===2?'twice':n+' times';
+function relName(a,b,sex,half){return (half&&a>0&&b>0?'half ':'')+relName0(a,b,sex)}
+function relName0(a,b,sex,half){const g=(m,f,u)=>sex==='M'?m:sex==='F'?f:u;const H='';
+  if(a===0&&b===0)return'same person';
+  if(a===0)return b===1?g('son','daughter','child'):b===2?g('grandson','granddaughter','grandchild'):greats(b-2)+g('grandson','granddaughter','grandchild');
+  if(b===0)return a===1?g('father','mother','parent'):a===2?g('grandfather','grandmother','grandparent'):greats(a-2)+g('grandfather','grandmother','grandparent');
+  if(a===1&&b===1)return H+g('brother','sister','sibling');
+  if(b===1)return (a===2?'':greats(a-2))+H+g('uncle','aunt','uncle or aunt');
+  if(a===1)return (b===2?'':b===3?'grand-':greats(b-3)+'grand-')+H+g('nephew','niece','nephew or niece');
+  const c=Math.min(a,b)-1,r=Math.abs(a-b);return H+nth(c)+' cousin'+(r?' '+times(r)+' removed':'')}
+function bloodLinks(A,B){const ma=upMap(A),mb=upMap(B);const common=[...ma.keys()].filter(k=>mb.has(k));
+  const isAncOfOther=x=>common.some(y=>y!==x&&upMap(y).has(x));
+  const lcas=common.filter(x=>!isAncOfOther(x));
+  // pair spouses who are both closest common ancestors at the same depths
+  const out=[],used=new Set();
+  lcas.forEach(x=>{if(used.has(x))return;used.add(x);const sp=famsOf(x).map(f=>spouseIn(f,x)).find(y=>y&&lcas.includes(y)&&!used.has(y)&&ma.get(y).d===ma.get(x).d&&mb.get(y).d===mb.get(x).d);
+    if(sp)used.add(sp);out.push({top:sp?[x,sp]:[x],a:ma.get(x).d,b:mb.get(x).d,half:!sp&&ma.get(x).d>0&&mb.get(x).d>0})});
+  const chain=(m,top)=>{const c=[];let x=m.get(top).down;while(x){c.push(x);x=m.get(x).down}return c}; // from just below top down to the person
+  out.forEach(o=>{o.pa=chain(ma,o.top[0]);o.pb=chain(mb,o.top[0])});
+  return out.sort((x,y)=>(x.a+x.b)-(y.a+y.b))}
+function marriagePath(A,B){const prev=new Map([[A,null]]);const q=[A];
+  while(q.length){const x=q.shift();if(x===B)break;const f=parentsOf(x);const nb=[];
+    if(f)[f.husb,f.wife].forEach(y=>y&&nb.push([y,'parent']));famsOf(x).forEach(fm=>{const sp=spouseIn(fm,x);if(sp)nb.push([sp,'spouse']);fm.chil.forEach(c=>nb.push([c,'child']))});
+    for(const[y,k]of nb)if(!prev.has(y)){prev.set(y,[x,k]);q.push(y)}}
+  if(!prev.has(B))return null;const steps=[];let x=B;while(prev.get(x)){const[px,k]=prev.get(x);steps.unshift([px,k,x]);x=px}
+  // parent then child of the same parent = brother/sister
+  const out=[];for(let i=0;i<steps.length;i++){const s=steps[i],n=steps[i+1];if(n&&s[1]==='parent'&&n[1]==='child'){out.push([s[0],'sibling',n[2]]);i++}else out.push(s)}
+  return out}
+function stepWord(k,id){const sx=P[id].sex;const g=(m,f,u)=>sx==='M'?m:sx==='F'?f:u;
+  return k==='parent'?g('father','mother','parent'):k==='child'?g('son','daughter','child'):k==='spouse'?g('husband','wife','spouse'):g('brother','sister','sibling')}
+function inlawName(steps){const ks=steps.map(s=>s[1]).join(','),last=steps[steps.length-1][2];const sx=P[last].sex;const g=(m,f,u)=>sx==='M'?m:sx==='F'?f:u;
+  return {'spouse':g('husband','wife','spouse'),'spouse,parent':g('father-in-law','mother-in-law','parent-in-law'),'child,spouse':g('son-in-law','daughter-in-law','child-in-law'),
+    'spouse,sibling':g('brother-in-law','sister-in-law','sibling-in-law'),'sibling,spouse':g('brother-in-law','sister-in-law','sibling-in-law'),'parent,spouse':g('stepfather','stepmother','step-parent'),'spouse,child':g('stepson','stepdaughter','stepchild')}[ks]||null}
+function drawRel(){const body=document.getElementById('v-body');if(!V.relA||!P[V.relA])V.relA=focusId;if(V.relB&&!P[V.relB])V.relB=null;
+  const A=V.relA,B=V.relB;const nm=id=>esc(plateName(P[id]));
+  const chipB=(id,end)=>`<button type="button" class="rl-chip${end?' end':''}" data-go-rel="${esc(id)}">${nm(id)}${years(P[id])?`<small>${years(P[id])}</small>`:''}</button>`;
+  let html=`<div class="rl-pick">${['A','B'].map(k=>`<div class="exist"><label>${k==='A'?'First person':'Second person'}<input type="search" data-rp="${k}" placeholder="Search by name" value="${V['rel'+k]?esc(plateName(P[V['rel'+k]])):''}" autocomplete="off"></label><div class="results" data-rr="${k}" hidden></div></div>`).join('')}</div>`;
+  if(A&&B&&A!==B){const links=bloodLinks(A,B);const first=esc(firstOf(P[A])||plateName(P[A]));
+    links.forEach(o=>{const name=relName(o.a,o.b,P[B].sex,o.half);
+      const col=(arr,end)=>`<div class="rl-col">${arr.map((id,i)=>`<span class="rl-arrow">↓</span>${chipB(id,i===arr.length-1)}`).join('')}</div>`;
+      const top=o.top.map(id=>chipB(id,id===A||id===B)).join(' <span class="rl-arrow">+</span> ');
+      html+=`<div class="rl-card"><h3>${nm(B)} is ${first}’s ${esc(name)}</h3><p class="why">${o.a===0||o.b===0?'Direct line':'Closest shared ancestor'+(o.top.length>1?'s':'')}: ${o.top.map(nm).join(' & ')}${o.a&&o.b?` (${o.a} generation${o.a>1?'s':''} up from ${first}, ${o.b} from ${esc(firstOf(P[B])||plateName(P[B]))})`:''}</p>
+        <div class="rl-tree"><div class="rl-top">${top}</div>${o.a&&o.b?col(o.pa)+col(o.pb):`<div class="rl-col" style="grid-column:1/-1">${(o.a?o.pa:o.pb).map((id,i,arr)=>`<span class="rl-arrow">↓</span>${chipB(id,i===arr.length-1)}`).join('')}</div>`}</div></div>`});
+    const mp=marriagePath(A,B);const usesMarriage=mp&&mp.some(s=>s[1]==='spouse');
+    if(mp&&(usesMarriage||!links.length)){const word=inlawName(mp);
+      const phrase=mp.map(s=>stepWord(s[1],s[2])).join('’s ');
+      html+=`<div class="rl-card"><h3>${nm(B)} is ${first}’s ${esc(word||phrase)}</h3><p class="why">${links.length?'Also connected through marriage':'Connected through marriage'}${word?'':': '+first+'’s '+esc(phrase)} (${mp.length} step${mp.length>1?'s':''})</p>
+        <div class="rl-steps">${chipB(A,true)}${mp.map(s=>`<span class="rl-arrow">→ ${esc(stepWord(s[1],s[2]))} →</span>${chipB(s[2],s[2]===B)}`).join('')}</div></div>`}
+    if(!links.length&&!mp)html+=`<div class="rl-card"><h3>No connection found</h3><p class="why">These two aren’t linked in the tree yet.</p></div>`}
+  else html+=`<p class="vnote">${A===B&&B?'Pick two different people.':'Pick the second person to see how they’re related. The first person starts as whoever you selected in the tree.'}</p>`;
+  body.innerHTML=html;
+  body.querySelectorAll('[data-rp]').forEach(inp=>{const k=inp.dataset.rp,rs=body.querySelector(`[data-rr="${k}"]`);
+    inp.oninput=()=>{const hits=window.__treeSearch(inp.value);rs.innerHTML=hits.map(h=>`<button type="button" data-rpick="${esc(h.id)}">${esc(h.name)} <small>${esc(h.years)}</small></button>`).join('')||'<button type="button" disabled>No match</button>';rs.hidden=!inp.value.trim()};
+    rs.onclick=e=>{const b=e.target.closest('[data-rpick]');if(!b)return;V['rel'+k]=b.dataset.rpick;drawRel()}});
+  body.querySelectorAll('[data-go-rel]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goRel)})}
 document.getElementById('views-open').onclick=()=>openViews();
 document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
 if(DATA&&DATA.homeId&&P[DATA.homeId]){const hb=document.getElementById('home');hb.textContent='Me';hb.title='Go back to yourself'}
