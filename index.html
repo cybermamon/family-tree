@@ -268,6 +268,8 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
         else if(tag==='FAMS')cur.fams.push(pfx+val);
         else if(tag==='NOTE')cur.notes.push(val);
         else if(tag==='_TREEID')cur.treeId=val;
+        else if(tag==='_MATCH')cur.matchNames=val.split('|').map(x=>x.trim()).filter(Boolean);
+        else if(tag==='_RENAME')cur.rename=true;
         else if(/^(BIRT|CHR|BAPM|DEAT|BURI)$/.test(tag))cur.ev[tag]=cur.ev[tag]||{};
       }else{
         if(tag==='HUSB')cur.husb=pfx+val;
@@ -733,27 +735,46 @@ const nrm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase
 const by=p=>((birthOf(p).date||'').match(/\d{4}/)||[''])[0];
 function planImport(text){
   const IP={},IF={};parseGed(text,'X:','import',IP,IF);
-  const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p)});
-  const map={},newP=[],fill=[];let matched=0;
+  const upd=/^\s*1\s+_UPDATE\b/m.test(text); // a research update: matches only by id or listed names, newer facts win
+  const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p);});
+  const toks=d=>nrm(d).split(' ').filter(Boolean);
+  const map={},newP=[],fill=[],matchedList=[];let matched=0;
   Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
     if(ip.treeId&&P[ip.treeId])m=P[ip.treeId];
+    else if(upd){for(const alt of (ip.matchNames||[])){const k=nrm(alt),c=(byName[k]||[]).filter((x,i,a)=>a.indexOf(x)===i);const cy=y?c.filter(p=>!by(p)||by(p)===y):c;const pick=cy.length===1?cy[0]:c.length===1?c[0]:null;if(pick){m=pick;break}}}
     else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
     else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
     const b=ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{},d=ip.ev.DEAT||ip.ev.BURI||{};
-    if(m){matched++;map[ip.id]=m.id;const mb=birthOf(m),md=deathOf(m);
-      const o={name:m.name,sex:m.sex!=='U'?m.sex:ip.sex,birthDate:mb.date||b.date||'',birthPlace:mb.place||b.place||'',deathDate:md.date||d.date||'',deathPlace:md.place||d.place||'',note:m.notes.join('\n\n')||ip.notes.join('\n\n')};
-      const before=[m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',m.notes.join('\n\n')].join('|'),after=[o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
+    if(m){matched++;map[ip.id]=m.id;matchedList.push([niceName(ip.name),m.id]);const mb=birthOf(m),md=deathOf(m);const extra=[];
+      const dt=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';if(nrm(a)===nrm(bb))return a;const ta=toks(a),tb=toks(bb);
+        if(ta.every(t=>tb.includes(t)))return bb;if(tb.every(t=>ta.includes(t)))return a;extra.push(label+' previously recorded as '+fmtDate(a));return bb};
+      const pl=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';const x=nrm(a),z=nrm(bb);if(x===z||x.includes(z))return a;if(z.includes(x))return bb;extra.push(label+' previously recorded as '+a);return bb};
+      let name=m.name;if(upd&&ip.rename&&nrm(niceName(ip.name))!==nrm(niceName(m.name))){name=ip.name;extra.push('Previously recorded as '+niceName(m.name)+'.')}
+      const old=m.notes.join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
+      const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',sex:m.sex!=='U'?m.sex:ip.sex,
+        birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place')};
+      o.note=upd?[old,...add,...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
+      if(o.middle===undefined)delete o.middle;
+      const before=[m.name,m.nick||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',old].join('|'),after=[o.name,o.nick,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
     else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
   Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
     let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
     else if(h||w)ex=Object.values(F).find(x=>(x.husb===(h||null)||x.wife===(w||null))&&(h?x.husb===h:x.wife===w)&&kids.some(k=>x.chil.includes(k)));
+    if(!ex&&!h!==!w&&kids.length)ex=Object.values(F).find(x=>(h?x.husb===h&&!x.wife:x.wife===w&&!x.husb)&&kids.some(k=>x.chil.includes(k)));
     const marr=f.ev.MARR||{};
-    if(ex){const add=kids.filter(k=>!ex.chil.includes(k));const em=ex.ev.MARR||{};const needM=(!em.date&&marr.date)||(!em.place&&marr.place);
-      if(add.length||needM){const c=JSON.parse(JSON.stringify(ex));c.chil=c.chil.concat(add);if(needM)c.ev.MARR={date:em.date||marr.date||'',place:em.place||marr.place||''};famW.push(c);famUpd++}}
+    if(ex){const add=kids.filter(k=>!ex.chil.includes(k));const em=ex.ev.MARR||{};
+      let md=em.date||marr.date||'',mp=em.place||marr.place||'';
+      if(upd&&marr.date&&em.date&&nrm(marr.date)!==nrm(em.date)){const ta=toks(em.date),tb=toks(marr.date);md=tb.every(t=>ta.includes(t))?em.date:marr.date}
+      if(upd&&marr.place&&em.place&&!nrm(em.place).includes(nrm(marr.place)))mp=marr.place;
+      const needM=md!==(em.date||'')||mp!==(em.place||'');
+      if(add.length||needM){const c=JSON.parse(JSON.stringify(ex));c.chil=c.chil.concat(add);if(needM)c.ev.MARR={date:md,place:mp};famW.push(c);famUpd++}}
     else{famW.push({id:'N:@F'+uid()+'@',husb:h||null,wife:w||null,chil:kids,ev:(marr.date||marr.place)?{MARR:{date:marr.date||'',place:marr.place||''}}:{}});famNew++}});
-  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched}}
+  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched,matchedList,upd}}
+window.__planImport=planImport;
+window.__applyImport=async plan=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
+  if(window.__PERM&&window.__PERM.editable)plan.newP.forEach(([id])=>window.__PERM.editable.add(id));rebuild();render(true);await flush()};
 document.getElementById('gedpick').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const box=document.getElementById('im-plan');if(!box)return;
   let plan;try{plan=planImport(await f.text())}catch(err){box.innerHTML='<p class="hint">That file could not be read as GEDCOM.</p>';return}
   if(!plan.total){box.innerHTML='<p class="hint">No people found in that file.</p>';return}
@@ -1305,13 +1326,26 @@ async function openResearch(empty){
    <p class="msg" id="rmsg"></p>
    <form id="zf"><label>Record photos (.zip with manifest.json)<input id="z-file" type="file" accept=".zip,application/zip" required></label><button class="go" type="submit">Attach photos</button></form>
    <p class="msg" id="zmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
+  let zDone=false;
   $('#zf').onsubmit=async e=>{e.preventDefault();const f=$('#z-file').files[0];const say=t=>$('#zmsg').textContent=t;if(!f)return;
     if(!window.__attachRecords){say('Open the tree first, then try again.');return}
     try{say('Reading the zip…');await loadJSZip();const zip=await JSZip.loadAsync(f);const mf=zip.file('manifest.json');if(!mf){say('This zip has no manifest.json.');return}
+      const ug=zip.file('update.ged');
+      if(ug&&!zDone){if(!window.__planImport){say('Open the tree first, then try again.');return}
+        const plan=window.__planImport(await ug.async('string'));const lab=id=>(window.__personLabel&&window.__personLabel(id))||id;
+        const nn=plan.newP.map(([,o])=>o.name.replace(/\//g,'').replace(/\s+/g,' ').trim());
+        $('#zmsg').innerHTML=`<strong>Research update</strong>: ${plan.fill.length} people updated, ${plan.newP.length} new people, ${plan.famNew} new family links, ${plan.famUpd} updated. Then the record photos are attached.
+          <details><summary>Matched to people already in the tree (${plan.matchedList.length})</summary><small>${plan.matchedList.map(([a,id])=>esc(a)+' → '+esc(lab(id))).join('<br>')}</small></details>
+          <details><summary>New people (${nn.length})</summary><small>${nn.map(esc).join(', ')}</small></details>
+          <small>Every change shows in History, where it can be undone.</small><br><button class="go" type="button" id="z-apply">Apply update</button> <button type="button" class="lnk" id="z-cancel">Cancel</button>`;
+        $('#z-cancel').onclick=()=>$('#zmsg').textContent='';
+        $('#z-apply').onclick=async()=>{$('#z-apply').disabled=true;say('Applying the update…');
+          try{await window.__applyImport(plan);zDone=true;$('#zf').requestSubmit()}catch(err){say('Stopped: '+((err&&err.message)||err))}};
+        return}
       const man=JSON.parse(await mf.async('string'));const types={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',pdf:'application/pdf',gif:'image/gif'};
       const items=man.items.filter(it=>zip.file(it.file)).map(it=>Object.assign({},it,{blob:async()=>new Blob([await zip.file(it.file).async('arraybuffer')],{type:types[(it.file.split('.').pop()||'').toLowerCase()]||'application/octet-stream'})}));
-      const r=await window.__attachRecords(items,(i,n)=>say('Attaching '+i+' of '+n+'…'));
-      say('Done. Attached '+r.added+' photo'+(r.added===1?'':'s')+(r.skipped?', '+r.skipped+' already there':'')+(r.missing.length?'. Not found in the tree: '+r.missing.join(', '):'')+'.')}
+      const r=await window.__attachRecords(items,(i,n)=>say('Attaching '+i+' of '+n+'…'));const wasUpd=zDone;zDone=false;
+      say((wasUpd?'Update applied. ':'')+'Done. Attached '+r.added+' photo'+(r.added===1?'':'s')+(r.skipped?', '+r.skipped+' already there':'')+(r.missing.length?'. Not found in the tree: '+r.missing.join(', '):'')+'.')}
     catch(err){say('Stopped: '+((err&&err.message)||err))}};
   $('#rclose').onclick=()=>box.hidden=true;
   $('#rf').onsubmit=async e=>{e.preventDefault();const files=[...$('#r-files').files];const out=[];let next=0;
