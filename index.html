@@ -151,6 +151,23 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .cols .c:hover{opacity:.8}
 .colx{display:flex;gap:2px;font-size:11px;color:var(--muted);margin-top:4px}.colx span{flex:1;min-width:0;white-space:nowrap;overflow:visible}
 .vnote{color:var(--muted);font-size:12px;margin:14px 0 0}
+.lc-wrap{max-width:1000px;margin:0 auto}
+.lc-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.lc-row{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,.8fr);gap:12px;align-items:center}
+.lc-gen{font-size:12px;font-weight:600;color:var(--muted);text-align:center}
+.lc-card{background:var(--panel);border:2px solid var(--accent);border-radius:12px;padding:12px 14px}
+.lc-card.me{background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.lc-card h4{margin:0 0 6px;font-family:var(--font-display);font-size:18px;font-weight:600;line-height:1.25}
+.lc-card h4 button{all:unset;cursor:pointer}.lc-card h4 button:hover{text-decoration:underline}
+.lc-card h4 .plus{color:var(--muted);font-weight:400;margin:0 6px}
+.lc-card p{margin:2px 0;font-size:13px;color:var(--muted)}
+.lc-rem{border-left:2px dashed var(--border);padding-left:12px;font-size:13px;color:var(--muted)}
+.lc-rem p{margin:2px 0}.lc-rem strong{color:var(--fg);font-weight:600}
+.lc-link{height:22px;margin-left:calc(34px + 12px);width:calc((100% - 46px) * .555);display:flex;justify-content:center}
+.lc-link span{width:2px;background:var(--accent)}
+@media (max-width:700px){.lc-row{grid-template-columns:26px 1fr}.lc-rem{grid-column:2;margin-top:-4px;margin-bottom:4px}.lc-link{width:calc(100% - 38px);margin-left:38px}}
+@media print{header,#views .vbar,.zoom,#sheet,.lc-ctl{display:none!important}#views{position:static}#views .vbody{overflow:visible}}
+
 </style>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
@@ -756,7 +773,7 @@ const surnameOf=p=>splitName(p.name).surname.trim();
 const firstOf=p=>(splitName(p.name).given.split(/\s+/)[0]||'').replace(/[^\p{L}.'-]/gu,'');
 const townOf=pl=>(pl||'').split(',')[0].trim();
 const bplace=p=>(p.ev.BIRT&&p.ev.BIRT.place)||(p.ev.CHR&&p.ev.CHR.place)||(p.ev.BAPM&&p.ev.BAPM.place)||'';
-let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false};
+let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false,lineTo:'father'};
 function scopePeople(){const all=Object.values(P);
   if(V.scope==='anc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);const f=parentsOf(x);if(f)st.push(f.husb,f.wife)}return all.filter(p=>s.has(p.id))}
   if(V.scope==='desc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);famsOf(x).forEach(f=>{st.push(...f.chil);const sp=spouseIn(f,x);if(sp)s.add(sp)})}return all.filter(p=>s.has(p.id))}
@@ -767,9 +784,9 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
   if(!V.line&&lines.length)V.line=lines[0][0];
   const fname=P[focusId]?niceName(P[focusId].name):'this person';
-  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button></div>
-    <select id="v-scope" aria-label="Who to include"><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
-    <select id="v-line" aria-label="Family line"${V.scope==='line'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
+  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button></div>
+    <select id="v-scope" aria-label="Who to include"${V.tab==='line'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
+    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
     ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
     <button class="btn vclose" type="button" id="v-close">Back to tree</button></div><div class="vbody" id="v-body"></div>`;
   box.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>openViews(b.dataset.vt));
@@ -777,7 +794,7 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
   document.getElementById('v-line').onchange=e=>{V.line=e.target.value;openViews()};
   const qi=document.getElementById('v-q');if(qi)qi.oninput=()=>{V.q=qi.value;drawList()};
   document.getElementById('v-close').onclick=()=>{box.hidden=true};
-  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else drawStats()}
+  if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else drawStats()}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
   let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
   const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
@@ -847,6 +864,47 @@ function drawBirthdays(){const body=document.getElementById('v-body');const toda
      <td style="text-align:right;white-space:nowrap">${r.turns!=null?(r.dead?r.turns+' years since birth':'Turns '+r.turns):''} <small>${when(r.days)}</small></td></tr>`).join('')}</tbody></table>`).join('')||'<p class="vnote">No full birth dates yet. Add a day and month to someone’s birth date to see them here.</p>'}`;
   const cb=document.getElementById('v-past');if(cb)cb.onchange=()=>{V.past=cb.checked;drawBirthdays()};
   body.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{document.getElementById('views').hidden=true;setFocus(r.dataset.id)})}
+
+// ---------- direct line chart (one ancestor per generation) ----------
+function linePath(start,mode){const path=[start];let cur=start;const seen=new Set([start]);
+  let target=null,targetSet=null;
+  if(mode!=='father'&&mode!=='mother'){target=mode;const up=new Map();const st=[start];up.set(start,null);
+    while(st.length){const x=st.shift();if(x===target)break;const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!up.has(y)){up.set(y,x);st.push(y)}})}
+    if(up.has(target)){const chain=[];let x=target;while(x){chain.unshift(x);x=up.get(x)}return chain}return path}
+  for(;;){const f=parentsOf(cur);const nx=f&&(mode==='father'?f.husb||null:f.wife||null);if(!nx||seen.has(nx))break;path.push(nx);seen.add(nx);cur=nx}
+  return path}
+function drawLine(){const body=document.getElementById('v-body');const me=focusId;if(!P[me]){body.innerHTML='<p class="vnote">Pick someone in the tree first.</p>';return}
+  const anc=[];{const st=[[me,0]],seen=new Set([me]);while(st.length){const[x,d]=st.shift();const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!seen.has(y)){seen.add(y);anc.push([y,d+1]);st.push([y,d+1])}})}}
+  if(V.lineTo!=='father'&&V.lineTo!=='mother'&&!anc.some(a=>a[0]===V.lineTo))V.lineTo='father';
+  const path=linePath(me,V.lineTo); // path[0]=me, path[n]=oldest
+  const yr=d=>year(d||'');const ev=(lab,e)=>e&&(e.date||e.place)?`${lab} ${esc(fmtDate(e.date||''))}${e.place?' '+esc(townOf(e.place)):''}`:'';
+  const life=p=>[ev('b.',p.ev.BIRT)||ev('bapt.',p.ev.CHR||p.ev.BAPM),ev('d.',p.ev.DEAT)||ev('bur.',p.ev.BURI)].filter(Boolean).join(', ');
+  const nmb=id=>`<button type="button" data-go-line="${esc(id)}">${esc(plateName(P[id]))}</button>`;
+  const first=id=>esc(firstOf(P[id])||plateName(P[id]));
+  const pars=id=>{const f=parentsOf(id);if(!f)return'';const ps=[f.husb,f.wife].filter(Boolean);return ps.map(x=>esc(plateName(P[x]))).join(' + ')};
+  const cards=path.slice().reverse().map((id,i,arr)=>{const g=arr.length-i;const p=P[id];const child=arr[i+1];
+    let fam=null;if(child){fam=famsOf(id).find(f=>f.chil.includes(child))||null}
+    const sp=fam?spouseIn(fam,id):null;
+    const lines=[];const l1=[p&&life(p)?first(id)+' '+life(p):'',sp&&life(P[sp])?first(sp)+' '+life(P[sp]):''].filter(Boolean).join(' · ');if(l1)lines.push(l1);
+    if(fam&&fam.ev.MARR&&(fam.ev.MARR.date||fam.ev.MARR.place))lines.push('Married '+esc(fmtDate(fam.ev.MARR.date||''))+(fam.ev.MARR.place?', '+esc(townOf(fam.ev.MARR.place)):''));
+    if(fam&&fam.chil.length>1){const ks=fam.chil.map(k=>P[k]).filter(Boolean);lines.push('Children: '+ks.map(k=>esc(firstOf(k)||plateName(k))+(byr(k)?' '+byr(k):'')).join(', '))}
+    if(!child&&!l1&&p)lines.push(esc(life(p)||''));
+    const rem=[];if(sp&&pars(sp))rem.push(`${first(sp)}’s parents: <strong>${pars(sp)}</strong>`);
+    const oth=famsOf(id).filter(f=>f!==fam&&spouseIn(f,id)).map(f=>esc(plateName(P[spouseIn(f,id)])));if(child&&oth.length)rem.push(`${first(id)} also married ${oth.join(', ')}`);
+    const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note));
+    return`<div class="lc-row"><div class="lc-gen">G${g}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
+      <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
+  const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
+  const sur=surnameOf(P[path[path.length-1]]);
+  body.innerHTML=`<div class="lc-wrap"><div class="lc-ctl"><label class="vnote" style="margin:0">Line<select id="lc-to" style="margin-left:6px">
+     <option value="father"${V.lineTo==='father'?' selected':''}>Father’s line (father to father)</option><option value="mother"${V.lineTo==='mother'?' selected':''}>Mother’s line (mother to mother)</option>
+     ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})</option>`).join('')}</select></label>
+     <button class="btn" type="button" id="lc-print">Print or save as PDF</button></div>
+   <h2 style="font-family:var(--font-display);margin:0 0 2px">${esc(sur||'Family')} Ancestry</h2><p class="vnote" style="margin:0 0 14px">${esc(plateName(P[me]))}’s ${esc(mode)} · ${path.length} generation${path.length>1?'s':''}. Pick another person in the tree to start from them.</p>
+   ${path.length>1?cards:cards+'<p class="vnote">No parents recorded on this line yet.</p>'}</div>`;
+  document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;drawLine()};
+  document.getElementById('lc-print').onclick=()=>window.print();
+  body.querySelectorAll('[data-go-line]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goLine)})}
 document.getElementById('views-open').onclick=()=>openViews();
 document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
 if(DATA&&DATA.homeId&&P[DATA.homeId]){const hb=document.getElementById('home');hb.textContent='Me';hb.title='Go back to yourself'}
