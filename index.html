@@ -191,6 +191,7 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .etable select{width:58px!important;padding:5px 2px!important}.etable tr:hover input{border-color:var(--grid)!important}
 .etable input:focus,.etable select:focus{border-color:var(--accent)!important;outline:none;background:var(--panel)!important}.etable td.ro{opacity:.65;font-size:13px;min-width:90px}.etable td.dirty input,.etable td.dirty select{background:rgba(220,170,40,.22)!important}
 .fsl{margin:4px 0 8px;font-size:14px}.fsl a{color:var(--accent)}
+.lc-yr{display:block;font-size:11px;font-weight:500;margin-top:2px;opacity:.85}.lc-yr.est{font-style:italic;opacity:.7}
 </style>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
@@ -1059,7 +1060,13 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
   const nmb=id=>`<button type="button" data-go-line="${esc(id)}">${esc(plateName(P[id]))}</button>`;
   const first=id=>esc(firstOf(P[id])||plateName(P[id]));
   const pars=id=>{const f=parentsOf(id);if(!f)return'';const ps=[f.husb,f.wife].filter(Boolean);return ps.map(x=>esc(plateName(P[x]))).join(' + ')};
-  const cards=path.slice().reverse().map((id,i,arr)=>{const g=arr.length-i;const p=P[id];const child=arr[i+1];
+  // a birth year for each generation: their own, else the spouse's, else from the next child or the marriage; gaps filled from the nearest known generations
+  const GAP=28;const known=path.map((id,k)=>{const p=P[id];if(byr(p))return{y:byr(p),how:'b'};const nxt=path[k-1];const fam=nxt?famsOf(id).find(f=>f.chil.includes(nxt)):null;
+    const sp=fam?spouseIn(fam,id):null;if(sp&&byr(P[sp]))return{y:byr(P[sp]),how:'s'};const ky=fam?fam.chil.map(c=>P[c]&&byr(P[c])).filter(Boolean):[];if(ky.length)return{y:Math.min(...ky)-GAP,how:'e'};
+    const my=fam&&fam.ev.MARR&&+((fam.ev.MARR.date||'').match(/\d{4}/)||[0])[0];if(my)return{y:my-25,how:'e'};return null});
+  const genYear=path.map((id,k)=>{if(known[k])return known[k];let a=-1,b=-1;for(let j=k-1;j>=0;j--)if(known[j]){a=j;break}for(let j=k+1;j<path.length;j++)if(known[j]){b=j;break}
+    if(a>=0&&b>=0)return{y:Math.round(known[a].y+(known[b].y-known[a].y)*(k-a)/(b-a)),how:'e'};if(a>=0)return{y:known[a].y-(k-a)*GAP,how:'e'};if(b>=0)return{y:known[b].y+(b-k)*GAP,how:'e'};return null});
+  const cards=path.slice().reverse().map((id,i,arr)=>{const g=arr.length-i;const gy=genYear[arr.length-1-i];const p=P[id];const child=arr[i+1];
     let fam=null;if(child){fam=famsOf(id).find(f=>f.chil.includes(child))||null}
     const sp=fam?spouseIn(fam,id):null;
     const lines=[];const l1=[p&&life(p)?first(id)+' '+life(p):'',sp&&life(P[sp])?first(sp)+' '+life(P[sp]):''].filter(Boolean).join(' · ');if(l1)lines.push(l1);
@@ -1069,7 +1076,7 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
     const rem=[];if(sp&&pars(sp))rem.push(`${first(sp)}’s parents: <strong>${pars(sp)}</strong>`);
     const oth=famsOf(id).filter(f=>f!==fam&&spouseIn(f,id)).map(f=>esc(plateName(P[spouseIn(f,id)])));if(child&&oth.length)rem.push(`${first(id)} also married ${oth.join(', ')}`);
     const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note));
-    return`<div class="lc-row"><div class="lc-gen">G${g}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
+    return`<div class="lc-row"><div class="lc-gen">G${g}${gy?`<small class="lc-yr${gy.how==='b'?'':' est'}" title="${gy.how==='b'?'Birth year':gy.how==='s'?'Spouse\u2019s birth year':'Estimated'}">${gy.how==='b'?'':'c.'}${gy.y}</small>`:''}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
       <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
   const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
   const sur=surnameOf(P[path[path.length-1]]);
@@ -1077,7 +1084,7 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
      <option value="father"${V.lineTo==='father'?' selected':''}>Father’s line (father to father)</option><option value="mother"${V.lineTo==='mother'?' selected':''}>Mother’s line (mother to mother)</option>
      ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})</option>`).join('')}</select></label>
      <button class="btn" type="button" id="lc-print">Print or save as PDF</button></div>
-   <h2 style="font-family:var(--font-display);margin:0 0 2px">${esc(sur||'Family')} Ancestry</h2><p class="vnote" style="margin:0 0 14px">${esc(plateName(P[me]))}’s ${esc(mode)} · ${path.length} generation${path.length>1?'s':''}. Pick another person in the tree to start from them.</p>
+   <h2 style="font-family:var(--font-display);margin:0 0 2px">${esc(sur||'Family')} Ancestry</h2><p class="vnote" style="margin:0 0 14px">${esc(plateName(P[me]))}’s ${esc(mode)} · ${path.length} generation${path.length>1?'s':''}. Pick another person in the tree to start from them. The year under each generation is a birth year; “c.” means estimated from the spouse, children, marriage or neighbouring generations (about 28 years apart).</p>
    ${path.length>1?cards:cards+'<p class="vnote">No parents recorded on this line yet.</p>'}</div>`;
   document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;drawLine()};
   document.getElementById('lc-print').onclick=()=>window.print();
