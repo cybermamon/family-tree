@@ -190,6 +190,7 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .tscroll{overflow-x:auto;max-width:100%}.etable td{padding:2px 4px}.etable{width:auto}.etable td{white-space:nowrap}.etable input,.etable select{box-sizing:border-box;width:var(--w,120px)!important;min-width:0!important;margin:0!important;font:inherit;font-size:14px!important;padding:5px 6px!important;border:1px solid transparent!important;border-radius:4px;background:transparent!important;color:inherit;height:auto!important}
 .etable select{width:58px!important;padding:5px 2px!important}.etable tr:hover input{border-color:var(--grid)!important}
 .etable input:focus,.etable select:focus{border-color:var(--accent)!important;outline:none;background:var(--panel)!important}.etable td.ro{opacity:.65;font-size:13px;min-width:90px}.etable td.dirty input,.etable td.dirty select{background:rgba(220,170,40,.22)!important}
+.fsl{margin:4px 0 8px;font-size:14px}.fsl a{color:var(--accent)}
 </style>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
@@ -273,6 +274,7 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
         else if(tag==='FAMS')cur.fams.push(pfx+val);
         else if(tag==='NOTE')cur.notes.push(val);
         else if(tag==='_TREEID')cur.treeId=val;
+        else if(tag==='_FSFTID'||tag==='_FSID')cur.fsid=val.trim().toUpperCase();
         else if(tag==='_MATCH')cur.matchNames=val.split('|').map(x=>x.trim()).filter(Boolean);
         else if(tag==='_RENAME')cur.rename=true;
         else if(/^(BIRT|CHR|BAPM|DEAT|BURI)$/.test(tag))cur.ev[tag]=cur.ev[tag]||{};
@@ -317,7 +319,7 @@ function rebuild(){
     const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
     p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
     [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
-    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||''}
+    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||''}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
   // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
   Object.values(F).forEach(f=>{f.chil=[...new Set(f.chil)]});
@@ -441,6 +443,7 @@ function openSheet(id){selId=id;const p=P[id];
   const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(niceName(P[spouseIn(f,id)].name))+')':''}`:'').filter(Boolean);
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(plateName(p))}</h2>${p.nick||p.maiden?`<div class="sub">${[p.nick?'“'+esc(p.nick)+'”':'',p.maiden?(()=>{const n=nameParts(p);return 'Born '+esc(niceName(`${n.given} ${n.middle} ${p.maiden}`))})():''].filter(Boolean).join(' · ')}</div>`:''}<div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
+   <div class="fsl">${p.fsid?`<a href="${esc(fsUrl(p.fsid))}" target="_blank" rel="noopener">FamilySearch ${esc(p.fsid)} ↗</a>`:`<a href="${esc(fsSearch(p))}" target="_blank" rel="noopener">Find on FamilySearch ↗</a>${canEditP(id)?' <small>then copy their ID into Edit</small>':''}`}</div>
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
    <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
@@ -475,6 +478,9 @@ function limited(){const pm=window.__PERM;return !!(pm&&pm.editable)}
 const canEditP=id=>canEdit()&&(!limited()||window.__PERM.editable.has(id));
 const keyOf=id=>id.replace(/[:@]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fsNorm=v=>{v=(v||'').trim();const m=v.match(/([A-Z0-9]{4}-[A-Z0-9]{3,4})\b/i);return m?m[1].toUpperCase():v.toUpperCase()};
+const fsUrl=id=>'https://www.familysearch.org/tree/person/details/'+encodeURIComponent(id);
+function fsSearch(p){const n=nameParts(p),b=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return'https://www.familysearch.org/search/tree/results?q.givenName='+encodeURIComponent(n.given)+'&q.surname='+encodeURIComponent(n.surname)+(b?'&q.birthLikeDate.from='+(b-2)+'&q.birthLikeDate.to='+(b+2):'')}
 function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return m?{given:m[1].trim(),surname:m[2].trim(),suffix:m[3].trim()}:{given:(n||'').trim(),surname:'',suffix:''}}
 // name parts with the middle name separated (stored, or guessed from the mother's surname)
 function nameParts(p){const nm=splitName(p.name);nm.middle='';const w=nm.given.split(/\s+/).filter(Boolean);
@@ -502,6 +508,7 @@ function openForm(o){
    <div class="two"><label>First name<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"><small class="fh">Given name(s)</small></label><label>Middle name<input id="ed-middle" value="${esc(nm.middle)}" autocomplete="off"><small class="fh">Mother's maiden surname. Keep it the same after marriage.</small></label></div>
    <div class="two"><label>Last name<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"><small class="fh">Current surname. For married women, the husband's surname.</small></label><label>Maiden name<input id="ed-maiden" value="${esc(p&&p.maiden||'')}" autocomplete="off"><small class="fh">Married women only: her own surname at birth.</small></label></div>
    <div class="two"><label>Nickname<input id="ed-nick" value="${esc(p&&p.nick||'')}" autocomplete="off"><small class="fh">What family calls them</small></label><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr., III" autocomplete="off"></label></div>
+   <label>FamilySearch ID<input id="ed-fsid" value="${esc(p&&p.fsid||'')}" placeholder="e.g. LZ4K-ABC" autocomplete="off" autocapitalize="characters"><small class="fh">From their FamilySearch profile address: familysearch.org/tree/person/details/<b>ID</b>. You can paste the whole address.</small></label>
    <div class="two">
    <label>Sex<select id="ed-sex"><option value="M"${sex==='M'?' selected':''}>Male</option><option value="F"${sex==='F'?' selected':''}>Female</option><option value="U"${sex==='U'?' selected':''}>Unknown</option></select></label></div>
    ${famPick}
@@ -541,7 +548,7 @@ function openForm(o){
 }
 function readForm(){const v=i=>document.getElementById(i).value.trim();
   const g=v('ed-given'),m=v('ed-middle'),s=v('ed-surname'),x=v('ed-suffix');
-  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
+  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
 function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
@@ -637,7 +644,7 @@ function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='
   const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
   const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place)};
   Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'));{const n=splitName(p.name);if(n.given)L.push('2 GIVN '+n.given);if(n.surname)L.push('2 SURN '+n.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
-      if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
+      if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));if(p.fsid)L.push('1 _FSFTID '+p.fsid);['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
     p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
     mediaOf(p.id).forEach(m=>{L.push('1 OBJE','2 FILE '+new URL(m.url,location.href).href);if(m.caption)L.push('2 TITL '+m.caption)});
     p.famc.forEach(f=>fm[f]&&L.push('1 FAMC '+fm[f]));p.fams.forEach(f=>fm[f]&&L.push('1 FAMS '+fm[f]))});
@@ -754,7 +761,7 @@ function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(r
     out.caps.push({label:niceName(p.name)+' → '+niceName(n2)+(extra.length?' (moves “'+extra[0]+'” to notes)':''),fix:()=>{const o=Object.assign({},OV_P[p.id]||personDoc(p));o.name=n2;
       if(extra.length)o.note=[o.note||'',...extra.map(x=>x.charAt(0).toUpperCase()+x.slice(1)+'.')].filter(Boolean).join('\n\n');queue('people',p.id,o)}})});
   return out}
-function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:p.notes.join('\n\n')}}
+function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',fsid:p.fsid||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:p.notes.join('\n\n')}}
 function showClean(){const box=document.getElementById('dup-list');const A=auditData();
   const S=[['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
     ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
@@ -802,7 +809,7 @@ function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   if(dn.surname&&kn.surname&&nrm(dn.surname)!==nrm(kn.surname)&&!K.maiden&&!D.maiden&&(K.sex==='F'||D.sex==='F'))extra.push('Other surname: '+dn.surname);
   const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
   const notes=[...new Set(K.notes.concat(D.notes))];
-  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',sex:K.sex!=='U'?K.sex:D.sex,
+  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',sex:K.sex!=='U'?K.sex:D.sex,
     birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),
     note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
   queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
@@ -817,10 +824,12 @@ function planImport(text){
   const IP={},IF={};parseGed(text,'X:','import',IP,IF);
   const upd=/^\s*1\s+_UPDATE\b/m.test(text); // a research update: matches only by id or listed names, newer facts win
   const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p);});
+  const byFs={};Object.values(P).forEach(p=>{if(p.fsid)byFs[p.fsid]=p});
   const toks=d=>nrm(d).split(' ').filter(Boolean);
   const map={},newP=[],fill=[],matchedList=[];let matched=0;
   Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
     if(ip.treeId&&P[ip.treeId])m=P[ip.treeId];
+    else if(ip.fsid&&byFs[ip.fsid])m=byFs[ip.fsid];
     else if(upd){for(const alt of (ip.matchNames||[])){const k=nrm(alt),c=(byName[k]||[]).filter((x,i,a)=>a.indexOf(x)===i);const cy=y?c.filter(p=>!by(p)||by(p)===y):c;const pick=cy.length===1?cy[0]:c.length===1?c[0]:null;if(pick){m=pick;break}}}
     else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
     else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
@@ -831,13 +840,13 @@ function planImport(text){
       const pl=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';const x=nrm(a),z=nrm(bb);if(x===z||x.includes(z))return a;if(z.includes(x))return bb;extra.push(label+' previously recorded as '+a);return bb};
       let name=m.name;if(upd&&ip.rename&&nrm(niceName(ip.name))!==nrm(niceName(m.name))){name=ip.name;extra.push('Previously recorded as '+niceName(m.name)+'.')}
       const old=m.notes.join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
-      const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',sex:m.sex!=='U'?m.sex:ip.sex,
+      const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',fsid:(upd&&ip.fsid)||m.fsid||ip.fsid||'',sex:m.sex!=='U'?m.sex:ip.sex,
         birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place')};
       o.note=upd?[old,...add,...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
       if(o.middle===undefined)delete o.middle;
-      const before=[m.name,m.nick||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',old].join('|'),after=[o.name,o.nick,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
+      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',old].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
-    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
   Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
     let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
@@ -918,7 +927,7 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
 
 // ---------- table: spreadsheet-style editing ----------
 const TCOLS=[['first','First name',1],['middle','Middle',1],['last','Last name',1],['maiden','Maiden',1],['nick','Nickname',1],['suffix','Suffix',1],['sex','Sex',1],
-  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['notes','Notes',0],['src','Source',0]];
+  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['fsid','FamilySearch ID',1],['notes','Notes',0],['src','Source',0]];
 const TDEF=['first','middle','last','sex','bdate','bplace','ddate','father','mother'];
 V.tdirty=V.tdirty||{};
 function tcols(){try{const c=JSON.parse(localStorage.getItem('ft-tcols')||'null');if(Array.isArray(c)&&c.length)return c}catch(e){}return TDEF}
@@ -927,7 +936,7 @@ function tval(p,k){const nm=nameParts(p),pf=parentsOf(p.id),b=birthOf(p),d=death
     case'sex':return p.sex==='M'?'M':p.sex==='F'?'F':'';case'bdate':return fmtDate(b.date||'');case'bplace':return b.place||'';case'ddate':return fmtDate(d.date||'');case'dplace':return d.place||'';
     case'father':return pf&&pf.husb&&P[pf.husb]?plateName(P[pf.husb]):'';case'mother':return pf&&pf.wife&&P[pf.wife]?plateName(P[pf.wife]):'';
     case'spouse':return famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(x=>x&&P[x]).map(x=>plateName(P[x])).join(', ');
-    case'notes':return p.notes.join(' ').slice(0,120);case'src':return p.src||''}return''}
+    case'fsid':return p.fsid||'';case'notes':return p.notes.join(' ').slice(0,120);case'src':return p.src||''}return''}
 const gedDate=v=>v.trim().toUpperCase().replace(/^ABOUT\b/,'ABT').replace(/^BEFORE\b/,'BEF').replace(/^AFTER\b/,'AFT').replace(/^EST\.?\b/,'EST');
 function drawTable(){const body=document.getElementById('v-body');const cols=tcols();const C=TCOLS.filter(c=>cols.includes(c[0]));const t=nrm(V.tq||'');
   const cur=(p,k)=>{const d=V.tdirty[p.id];return d&&k in d?d[k]:tval(p,k)};
@@ -960,7 +969,7 @@ function drawTable(){const body=document.getElementById('v-body');const cols=tco
   document.getElementById('t-save').onclick=async()=>{const sv=document.getElementById('t-save');sv.disabled=true;sv.textContent='Saving…';let n=0;
     for(const id in V.tdirty){const p=P[id];if(!p||!canEditP(id))continue;const d=V.tdirty[id],g=k=>k in d?d[k]:tval(p,k);
       const o=Object.assign({},OV_P[id]||personDoc(p));const first=g('first').trim(),mid=g('middle').trim(),last=g('last').trim(),suf=g('suffix').trim();
-      o.name=`${first}${mid?' '+mid:''} /${last}/${suf?' '+suf:''}`.trim();o.middle=mid;o.maiden=g('maiden').trim();o.nick=g('nick').trim();o.sex=g('sex')||'U';
+      o.name=`${first}${mid?' '+mid:''} /${last}/${suf?' '+suf:''}`.trim();o.middle=mid;o.maiden=g('maiden').trim();o.nick=g('nick').trim();o.sex=g('sex')||'U';o.fsid=fsNorm(g('fsid'));
       o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();queue('people',id,o);n++}
     V.tdirty={};rebuild();render(true);await flush();drawTable();body.insertAdjacentHTML('afterbegin',`<p class="vnote"><strong>Saved ${n} ${n===1?'person':'people'}.</strong> Changes show in History.</p>`)}}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
