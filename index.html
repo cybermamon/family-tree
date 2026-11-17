@@ -320,7 +320,7 @@ function rebuild(){
     const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
     p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
     [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
-    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||''}
+    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||'';p.notSame=o.notSame||[]}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
   // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
   Object.values(F).forEach(f=>{f.chil=[...new Set(f.chil)]});
@@ -552,7 +552,7 @@ function readForm(){const v=i=>document.getElementById(i).value.trim();
   return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
-function queue(coll,id,data){OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
+function queue(coll,id,data){if(coll==='people'&&data&&!data.deleted&&data.notSame===undefined&&P[id]&&P[id].notSame&&P[id].notSame.length)data.notSame=P[id].notSame.slice();OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
 async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>last[w[0]+'|'+w[1]]=i);const keep=writes.filter((w,i)=>last[w[0]+'|'+w[1]]===i);writes.length=0;writes.push(...keep)}
   try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
   while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
@@ -701,12 +701,13 @@ function findDups(){ // same person entered twice: first and last name match, th
     [...up1,...up2].forEach(z=>famsOf(z).forEach(f=>f.chil.forEach(c=>near.add(c))));near.delete(x.id);return sps(y).some(z=>near.has(z))}
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
+  const apart=(x,y)=>(x.notSame||[]).includes(y.id)||(y.notSame||[]).includes(x.id);
   const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
-    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(!apart(a[i],a[j])&&same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
   const seenPair=new Set(out.map(([a,b])=>[a.id,b.id].sort().join('|')));
   Object.values(P).forEach(sp=>{const ws=sps(sp).map(id=>P[id]).filter(Boolean);
     for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){let a=ws[i],b=ws[j];const k=[a.id,b.id].sort().join('|');if(seenPair.has(k)||a.id===b.id)continue;
-      if(W(a)[0]!==W(b)[0]||!sexOk(a,b)||(by(a)&&by(b)&&by(a)!==by(b)))continue;
+      if(W(a)[0]!==W(b)[0]||apart(a,b)||!sexOk(a,b)||(by(a)&&by(b)&&by(a)!==by(b)))continue;
       if(score(b)>score(a))[a,b]=[b,a];if(canEditP(a.id)&&canEditP(b.id)){seenPair.add(k);out.push([a,b])}}});
   return out}
 function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
@@ -716,12 +717,15 @@ function showDups(){const box=document.getElementById('dup-list');const ds=findD
   if(!ds.length){box.innerHTML='<p class="sub">No duplicates found.</p>';return}
   box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
    ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
-    <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button></div></div>`).join('');
+    <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button><button class="btn" type="button" data-apart="${esc(a.map(p=>p.id).join('|'))}">Not the same person</button></div></div>`).join('');
   box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
     ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
   const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
     all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k.id]&&P[d.id]){mergeInto(k.id,d.id);rebuild()}});render(true);await flush();showDups()};
-  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)})}
+  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)});
+  box.querySelectorAll('[data-apart]').forEach(b=>b.onclick=async()=>{const[x,y]=b.dataset.apart.split('|');b.disabled=true;
+    [[x,y],[y,x]].forEach(([a,o])=>{const p=P[a];if(!p)return;const d=Object.assign({},OV_P[a]||personDoc(p));d.notSame=[...new Set([...(p.notSame||[]),o])];queue('people',a,d)});
+    rebuild();await flush();showDups()})}
 
 // ---------- clean-up check: problems in the stored data, each fixed only after the admin ticks it ----------
 function rawFam(id){const o=OV_F[id];if(o)return o.deleted?null:{id,husb:o.husb||null,wife:o.wife||null,chil:(o.chil||[]).slice(),ev:(o.marrDate||o.marrPlace)?{MARR:{date:o.marrDate||'',place:o.marrPlace||''}}:{}};
@@ -810,7 +814,7 @@ function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   if(dn.surname&&kn.surname&&nrm(dn.surname)!==nrm(kn.surname)&&!K.maiden&&!D.maiden&&(K.sex==='F'||D.sex==='F'))extra.push('Other surname: '+dn.surname);
   const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
   const notes=[...new Set(K.notes.concat(D.notes))];
-  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',sex:K.sex!=='U'?K.sex:D.sex,
+  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',notSame:[...new Set([...(K.notSame||[]),...(D.notSame||[])])].filter(x=>x!==keep&&x!==drop),sex:K.sex!=='U'?K.sex:D.sex,
     birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),
     note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
   queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
