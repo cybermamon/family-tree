@@ -897,6 +897,8 @@ function fxApply(g){const W=g.W;
   for(const o of g.ops){
     if(o.op==='merge'){if(!P[W[o.keep]]||!P[W[o.drop]])throw new Error('merge: person missing');mergeInto(W[o.keep],W[o.drop])}
     else if(o.op==='unlinkChild'){const f=cl(fam(o.fam));f.chil=f.chil.filter(x=>x!==W[o.child]);put(f)}
+    else if(o.op==='deleteIfAlone'){const id=W[o.who];if(P[id]&&!Object.values(F).some(f=>f.husb===id||f.wife===id||f.chil.includes(id)))queue('people',id,Object.assign({},OV_P[id]||personDoc(P[id]),{deleted:true}))}
+    else if(o.op==='notSame'){const a=W[o.a],b=W[o.b];[[a,b],[b,a]].forEach(([x,y])=>{const q=P[x];if(!q)return;const d=Object.assign({},OV_P[x]||personDoc(q));d.notSame=[...new Set([...(q.notSame||[]),y])];queue('people',x,d)})}
     else if(o.op==='linkChild'){const f=cl(fam(o.fam)),c=W[o.child];if(!P[c])throw new Error('child missing');if(!f.chil.includes(c)){f.chil.push(c);put(f)}}
     else if(o.op==='addChild'){const f=cl(fam(o.fam));if(f.chil.some(x=>P[x]&&nrm(niceName(P[x].name))===nrm(niceName(o.person.name))))continue;
       const nid='N:@I'+uid()+'@';queue('people',nid,Object.assign({name:'',middle:'',maiden:'',nick:'',fsid:'',sex:'U',birthDate:'',birthPlace:'',deathDate:'',deathPlace:'',deathCause:'',note:''},o.person));
