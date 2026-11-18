@@ -288,6 +288,7 @@ function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
     }else if(lv===2){
       if((tag==='CONT'||tag==='CONC')&&l1==='NOTE'&&cur.notes.length){cur.notes[cur.notes.length-1]+=(tag==='CONT'?'\n':'')+val}
       else if(cur.ev[l1]&&(tag==='DATE'||tag==='PLAC'))cur.ev[l1][tag==='PLAC'?'place':'date']=val;
+      else if(tag==='CAUS'&&(l1==='DEAT'||l1==='BURI')&&cur.ev[l1])cur.ev[l1].cause=val;
       else if(l1==='NAME'&&tag==='GIVN'&&!cur.given)cur.given=val;
       else if(l1==='NAME'&&tag==='NICK'&&!cur.nick)cur.nick=val;
       else if(l1==='NAME'&&tag==='TYPE'&&/birth|maiden/i.test(val)&&cur.nameN>1&&cur.altName&&!cur.maiden)cur.maiden=(cur.altName.match(/\/([^/]*)\//)||[])[1]||'';
@@ -298,6 +299,10 @@ function niceName(n){return (n||'Unknown').replace(/\//g,'').replace(/\s+/g,' ')
 function year(d){if(!d)return'';const y=(d.match(/\d{4}/)||[''])[0];if(!y)return'';return(/^(ABT|EST|CAL|BEF|AFT)/i.test(d)?'c.':'')+y}
 function birthOf(p){return p.ev.BIRT||p.ev.CHR||p.ev.BAPM||{}}
 function deathOf(p){return p.ev.DEAT||p.ev.BURI||{}}
+function causeOf(p){const c=(p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause);if(c)return c;
+  for(const n of p.notes||[]){const m=n.match(/\b(?:died|death) (?:of|from) ([a-z][a-z \-']{2,40}?)(?=[.,;(]| aged| at | in |$)/i)||n.match(/\bcause of death:? ([a-z][a-z \-']{2,40}?)(?=[.,;(]|$)/i);if(m)return m[1].trim()}return''}
+const CAUSE_GROUPS=[['Cholera',/c[oh]+olera/i],['Malaria',/malaria|paludism/i],['Tuberculosis',/tubercul|tisis|phthisis|consumption|\btb\b|pulmonar/i],['Pneumonia or bronchitis',/pneumon|neumon|bronch|pulmon/i],['Fever',/fever|fiebre|calentura|typhoid|tifoidea/i],['Diarrhea or dysentery',/diarr|disenter|dysenter|enteritis|gastro/i],['Heart',/heart|cardi|corazon/i],['Stroke',/cerebral|apoplex|stroke|hemorrhage/i],['Cancer',/cancer|carcinom|tumou?r/i],['Smallpox or measles',/viruela|smallpox|measles|sarampion/i],['Tetanus',/tetan|pasmo/i],['Childbirth',/parto|childbirth|puerper/i],['Old age',/old age|vejez|senil|senectud/i],['Accident or violence',/accident|drown|ahog|killed|wound|herida|murder|war/i]];
+function causeGroup(c){for(const[g,re]of CAUSE_GROUPS)if(re.test(c))return g;return c?c.charAt(0).toUpperCase()+c.slice(1).toLowerCase():''}
 function years(p){const b=year(birthOf(p).date),d=year(deathOf(p).date);if(!b&&!d)return'';return (b||'?')+' – '+(d||(isDead(p)?'?':''))}
 function isDead(p){if(p.ev.DEAT||p.ev.BURI)return true;const y=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return y&&y<1926}
 function fmtDate(d){if(!d)return'';return d.replace(/\bABT\b/i,'about').replace(/\bBEF\b/i,'before').replace(/\bAFT\b/i,'after').replace(/\bEST\b/i,'est.').replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/g,m=>m[0]+m.slice(1).toLowerCase())}
@@ -319,7 +324,8 @@ function rebuild(){
   for(const id in OV_P){const o=OV_P[id];if(o.deleted){delete P[id];continue}
     const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
     p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
-    [['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
+    const oc=(p.ev.DEAT&&p.ev.DEAT.cause)||'';[['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
+    {const c=o.deathCause!==undefined?o.deathCause:oc;if(c){p.ev.DEAT=p.ev.DEAT||{date:'',place:''};p.ev.DEAT.cause=c}}
     p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||'';p.notSame=o.notSame||[]}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
   // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
@@ -448,7 +454,7 @@ function openSheet(id){selId=id;const p=P[id];
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
    <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
-   <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}
+   <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}${causeOf(p)?`<dt>Cause of death</dt><dd>${esc(causeOf(p))}</dd>`:''}
    ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
    ${par.length?`<dt>Parents</dt><dd class="rel">${par.map(chip).join('')}</dd>`:''}
    ${sps.length?`<dt>Spouse</dt><dd class="rel">${sps.map(chip).join('')}</dd>`:''}
@@ -515,6 +521,7 @@ function openForm(o){
    ${famPick}
    <div class="two"><label>Birth date<input id="ed-bdate" value="${esc(b.date||'')}" placeholder="3 APR 1949, ABT 1913"></label><label>Birth place<input id="ed-bplace" value="${esc(b.place||'')}"></label></div>
    <div class="two"><label>Death date<input id="ed-ddate" value="${esc(d.date||'')}" placeholder="21 MAY 2014"></label><label>Death place<input id="ed-dplace" value="${esc(d.place||'')}"></label></div>
+   <label>Cause of death<input id="ed-dcause" value="${esc(p&&p.ev.DEAT&&p.ev.DEAT.cause||'')}" placeholder="e.g. cholera" autocomplete="off"><small class="fh">As written in the death or burial record</small></label>
    <label>Notes<textarea id="ed-note" rows="4">${esc(p?p.notes.join('\n\n'):'')}</textarea></label>
    <div class="acts"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-back="${o.mode==='edit'?o.id:o.anchor}">Cancel</button>
    ${o.mode==='edit'?`<button class="btn danger" type="button" data-del="${o.id}">Delete person</button>`:''}</div>
@@ -549,7 +556,7 @@ function openForm(o){
 }
 function readForm(){const v=i=>document.getElementById(i).value.trim();
   const g=v('ed-given'),m=v('ed-middle'),s=v('ed-surname'),x=v('ed-suffix');
-  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),note:document.getElementById('ed-note').value.trim()}}
+  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),deathCause:v('ed-dcause'),note:document.getElementById('ed-note').value.trim()}}
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
 function queue(coll,id,data){if(coll==='people'&&data&&!data.deleted&&data.notSame===undefined&&P[id]&&P[id].notSame&&P[id].notSame.length)data.notSame=P[id].notSame.slice();OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
@@ -643,7 +650,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
 // ---------- export ----------
 function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
   const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
-  const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place)};
+  const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place);if(e.cause)L.push('2 CAUS '+e.cause)};
   Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'));{const n=splitName(p.name);if(n.given)L.push('2 GIVN '+n.given);if(n.surname)L.push('2 SURN '+n.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
       if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));if(p.fsid)L.push('1 _FSFTID '+p.fsid);['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
     p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
@@ -766,7 +773,7 @@ function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(r
     out.caps.push({label:niceName(p.name)+' → '+niceName(n2)+(extra.length?' (moves “'+extra[0]+'” to notes)':''),fix:()=>{const o=Object.assign({},OV_P[p.id]||personDoc(p));o.name=n2;
       if(extra.length)o.note=[o.note||'',...extra.map(x=>x.charAt(0).toUpperCase()+x.slice(1)+'.')].filter(Boolean).join('\n\n');queue('people',p.id,o)}})});
   return out}
-function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',fsid:p.fsid||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:p.notes.join('\n\n')}}
+function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',fsid:p.fsid||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',deathCause:(p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause)||'',note:p.notes.join('\n\n')}}
 function showClean(){const box=document.getElementById('dup-list');const A=auditData();
   const S=[['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
     ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
@@ -815,7 +822,7 @@ function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
   const notes=[...new Set(K.notes.concat(D.notes))];
   const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',notSame:[...new Set([...(K.notSame||[]),...(D.notSame||[])])].filter(x=>x!==keep&&x!==drop),sex:K.sex!=='U'?K.sex:D.sex,
-    birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),
+    birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),deathCause:kd.cause||dd.cause||'',
     note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
   queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
   // files follow the person
@@ -846,12 +853,12 @@ function planImport(text){
       let name=m.name;if(upd&&ip.rename&&nrm(niceName(ip.name))!==nrm(niceName(m.name))){name=ip.name;extra.push('Previously recorded as '+niceName(m.name)+'.')}
       const old=m.notes.join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
       const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',fsid:(upd&&ip.fsid)||m.fsid||ip.fsid||'',sex:m.sex!=='U'?m.sex:ip.sex,
-        birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place')};
+        birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place'),deathCause:(upd&&d.cause)||md.cause||d.cause||''};
       o.note=upd?[old,...add,...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
       if(o.middle===undefined)delete o.middle;
-      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',old].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.note].join('|');
+      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',old].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
-    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',note:ip.notes.join('\n\n')}])}});
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
   Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
     let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
@@ -932,13 +939,13 @@ function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('view
 
 // ---------- table: spreadsheet-style editing ----------
 const TCOLS=[['first','First name',1],['middle','Middle',1],['last','Last name',1],['maiden','Maiden',1],['nick','Nickname',1],['suffix','Suffix',1],['sex','Sex',1],
-  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['fsid','FamilySearch ID',1],['notes','Notes',0],['src','Source',0]];
+  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['dcause','Cause of death',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['fsid','FamilySearch ID',1],['notes','Notes',0],['src','Source',0]];
 const TDEF=['first','middle','last','sex','bdate','bplace','ddate','father','mother'];
 V.tdirty=V.tdirty||{};
 function tcols(){try{const c=JSON.parse(localStorage.getItem('ft-tcols')||'null');if(Array.isArray(c)&&c.length)return c}catch(e){}return TDEF}
 function tval(p,k){const nm=nameParts(p),pf=parentsOf(p.id),b=birthOf(p),d=deathOf(p);
   switch(k){case'first':return nm.given;case'middle':return nm.middle;case'last':return nm.surname;case'suffix':return nm.suffix;case'maiden':return p.maiden||'';case'nick':return p.nick||'';
-    case'sex':return p.sex==='M'?'M':p.sex==='F'?'F':'';case'bdate':return fmtDate(b.date||'');case'bplace':return b.place||'';case'ddate':return fmtDate(d.date||'');case'dplace':return d.place||'';
+    case'sex':return p.sex==='M'?'M':p.sex==='F'?'F':'';case'bdate':return fmtDate(b.date||'');case'bplace':return b.place||'';case'ddate':return fmtDate(d.date||'');case'dplace':return d.place||'';case'dcause':return (p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause)||'';
     case'father':return pf&&pf.husb&&P[pf.husb]?plateName(P[pf.husb]):'';case'mother':return pf&&pf.wife&&P[pf.wife]?plateName(P[pf.wife]):'';
     case'spouse':return famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(x=>x&&P[x]).map(x=>plateName(P[x])).join(', ');
     case'fsid':return p.fsid||'';case'notes':return p.notes.join(' ').slice(0,120);case'src':return p.src||''}return''}
@@ -975,7 +982,7 @@ function drawTable(){const body=document.getElementById('v-body');const cols=tco
     for(const id in V.tdirty){const p=P[id];if(!p||!canEditP(id))continue;const d=V.tdirty[id],g=k=>k in d?d[k]:tval(p,k);
       const o=Object.assign({},OV_P[id]||personDoc(p));const first=g('first').trim(),mid=g('middle').trim(),last=g('last').trim(),suf=g('suffix').trim();
       o.name=`${first}${mid?' '+mid:''} /${last}/${suf?' '+suf:''}`.trim();o.middle=mid;o.maiden=g('maiden').trim();o.nick=g('nick').trim();o.sex=g('sex')||'U';o.fsid=fsNorm(g('fsid'));
-      o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();queue('people',id,o);n++}
+      o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();o.deathCause=g('dcause').trim();queue('people',id,o);n++}
     V.tdirty={};rebuild();render(true);await flush();drawTable();body.insertAdjacentHTML('afterbegin',`<p class="vnote"><strong>Saved ${n} ${n===1?'person':'people'}.</strong> Changes show in History.</p>`)}}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
   let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
@@ -1003,7 +1010,7 @@ function drawStats(){const body=document.getElementById('v-body');const ps=scope
   const pct=x=>n?Math.round(100*x/n)+'%':'';
   const split=`<div class="split" role="img" aria-label="${m} men, ${f} women${u?', '+u+' unknown':''}">${m?`<span title="Men: ${m}" style="flex:${m};background:var(--m-edge)"></span>`:''}${f?`<span title="Women: ${f}" style="flex:${f};background:var(--f-edge)"></span>`:''}${u?`<span title="Unknown: ${u}" style="flex:${u};background:var(--u-edge)"></span>`:''}</div>`;
   const hbars=(rows,title,note)=>{const mx=Math.max(1,...rows.map(r=>r[1]));return`<div class="chart"><h3>${title}</h3>${rows.length?rows.map(([l,c])=>`<div class="hbar" title="${esc(l)}: ${c}"><span class="t">${esc(l)}</span><span class="b" style="width:${100*c/mx}%"></span><span class="n">${c}</span></div>`).join(''):'<p class="vnote">Not enough data.</p>'}${note?`<p class="vnote">${note}</p>`:''}</div>`};
-  const count=fn=>{const o={};ps.forEach(p=>{const k=fn(p);if(k)o[k]=(o[k]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8)};
+  const count=(fn,k8=8)=>{const o={};ps.forEach(p=>{const k=fn(p);if(k)o[k]=(o[k]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,k8)};
   // births per decade
   const dec={};ys.forEach(y=>{const d=Math.floor(y/10)*10;dec[d]=(dec[d]||0)+1});
   let decs=[];if(ys.length){for(let d=Math.floor(y0/10)*10;d<=Math.floor(y1/10)*10;d+=10)decs.push([d,dec[d]||0])}
@@ -1028,6 +1035,7 @@ function drawStats(){const body=document.getElementById('v-body');const ps=scope
     ${hbars(count(surnameOf),'Most common surnames')}
     ${hbars(count(firstOf),'Most common first names')}
     ${hbars(count(p=>townOf(bplace(p))),'Most common birthplaces')}
+    ${hbars(count(p=>isDead(p)&&causeGroup(causeOf(p)),12),'Causes of death',`${ps.filter(p=>isDead(p)&&causeOf(p)).length} of ${dead} deceased have a recorded cause, from death and burial records.`)}
   </div><p class="vnote">Based on the dates in the tree. People without dates are counted where possible but left out of ages.</p>`}
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MON3={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
