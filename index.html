@@ -326,7 +326,7 @@ function rebuild(){
     p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
     const oc=(p.ev.DEAT&&p.ev.DEAT.cause)||'';[['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
     {const c=o.deathCause!==undefined?o.deathCause:oc;if(c){p.ev.DEAT=p.ev.DEAT||{date:'',place:''};p.ev.DEAT.cause=c}}
-    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||'';p.notSame=o.notSame||[]}
+    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||'';p.notSame=o.notSame||[];p.srcId=o.srcId||''}
   for(const id in P){P[id].famc=[];P[id].fams=[]}
   // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
   Object.values(F).forEach(f=>{f.chil=[...new Set(f.chil)]});
@@ -559,7 +559,7 @@ function readForm(){const v=i=>document.getElementById(i).value.trim();
   return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),deathCause:v('ed-dcause'),note:document.getElementById('ed-note').value.trim()}}
 function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
 const writes=[];
-function queue(coll,id,data){if(coll==='people'&&data&&!data.deleted&&data.notSame===undefined&&P[id]&&P[id].notSame&&P[id].notSame.length)data.notSame=P[id].notSame.slice();OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
+function queue(coll,id,data){if(coll==='people'&&data&&!data.deleted&&data.notSame===undefined&&P[id]&&P[id].notSame&&P[id].notSame.length)data.notSame=P[id].notSame.slice();if(coll==='people'&&data&&!data.deleted&&data.srcId===undefined&&P[id]&&P[id].srcId)data.srcId=P[id].srcId;OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
 async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>last[w[0]+'|'+w[1]]=i);const keep=writes.filter((w,i)=>last[w[0]+'|'+w[1]]===i);writes.length=0;writes.push(...keep)}
   try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
   while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
@@ -821,7 +821,7 @@ function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   if(dn.surname&&kn.surname&&nrm(dn.surname)!==nrm(kn.surname)&&!K.maiden&&!D.maiden&&(K.sex==='F'||D.sex==='F'))extra.push('Other surname: '+dn.surname);
   const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
   const notes=[...new Set(K.notes.concat(D.notes))];
-  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',notSame:[...new Set([...(K.notSame||[]),...(D.notSame||[])])].filter(x=>x!==keep&&x!==drop),sex:K.sex!=='U'?K.sex:D.sex,
+  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',srcId:K.srcId||D.srcId||'',notSame:[...new Set([...(K.notSame||[]),...(D.notSame||[])])].filter(x=>x!==keep&&x!==drop),sex:K.sex!=='U'?K.sex:D.sex,
     birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),deathCause:kd.cause||dd.cause||'',
     note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
   queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
@@ -836,11 +836,11 @@ function planImport(text){
   const IP={},IF={};parseGed(text,'X:','import',IP,IF);
   const upd=/^\s*1\s+_UPDATE\b/m.test(text); // a research update: matches only by id or listed names, newer facts win
   const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p);});
-  const byFs={};Object.values(P).forEach(p=>{if(p.fsid)byFs[p.fsid]=p});
+  const byFs={},bySrc={};Object.values(P).forEach(p=>{if(p.fsid)byFs[p.fsid]=p;if(p.srcId)bySrc[p.srcId]=p});
   const toks=d=>nrm(d).split(' ').filter(Boolean);
   const map={},newP=[],fill=[],matchedList=[];let matched=0;
   Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
-    if(ip.treeId&&P[ip.treeId])m=P[ip.treeId];
+    if(ip.treeId&&(P[ip.treeId]||bySrc[ip.treeId]))m=P[ip.treeId]||bySrc[ip.treeId];
     else if(ip.fsid&&byFs[ip.fsid])m=byFs[ip.fsid];
     else if(upd){for(const alt of (ip.matchNames||[])){const k=nrm(alt),c=(byName[k]||[]).filter((x,i,a)=>a.indexOf(x)===i);const cy=y?c.filter(p=>!by(p)||by(p)===y):c;const pick=cy.length===1?cy[0]:c.length===1?c[0]:null;if(pick){m=pick;break}}}
     else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
@@ -858,10 +858,10 @@ function planImport(text){
       if(o.middle===undefined)delete o.middle;
       const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',old].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
-    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',srcId:ip.treeId||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
   Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
-    let ex=null;if(h&&w)ex=Object.values(F).find(x=>x.husb===h&&x.wife===w);
+    let ex=null;if(h&&w){const nw=famW.find(x=>x.husb===h&&x.wife===w&&/^N:/.test(x.id)&&!F[x.id]);if(nw){kids.forEach(k=>{if(!nw.chil.includes(k))nw.chil.push(k)});return}ex=Object.values(F).find(x=>x.husb===h&&x.wife===w)}
     else if(h||w)ex=Object.values(F).find(x=>(x.husb===(h||null)||x.wife===(w||null))&&(h?x.husb===h:x.wife===w)&&kids.some(k=>x.chil.includes(k)));
     if(!ex&&!h!==!w&&kids.length)ex=Object.values(F).find(x=>(h?x.husb===h&&!x.wife:x.wife===w&&!x.husb)&&kids.some(k=>x.chil.includes(k)));
     const marr=f.ev.MARR||{};
