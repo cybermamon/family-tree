@@ -876,6 +876,40 @@ function planImport(text){
 window.__planImport=planImport;
 window.__applyImport=async plan=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
   if(window.__PERM&&window.__PERM.editable)plan.newP.forEach(([id])=>window.__PERM.editable.add(id));rebuild();render(true);await flush()};
+// ---------- tree fixes (fixes.json in a research zip): link changes and merges, each group approved on its own ----------
+function fxFind(r){if(!r)return{err:'no person given'};let c=Object.values(P);
+  const kin=(ids,n)=>ids.some(x=>P[x]&&nrm(niceName(P[x].name)).includes(nrm(n)));
+  const par=p=>p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(Boolean),sps=p=>p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(Boolean),kids=p=>p.fams.flatMap(f=>F[f]?F[f].chil:[]);
+  if(r.fsid)c=c.filter(p=>p.fsid&&fsNorm(p.fsid)===fsNorm(r.fsid));
+  if(r.name){const ns=[r.name].concat(r.alt||[]).map(nrm);c=c.filter(p=>ns.includes(nrm(niceName(p.name))))}
+  if(r.born)c=c.filter(p=>by(p)===String(r.born));if(r.hasFs!==undefined)c=c.filter(p=>!!p.fsid===!!r.hasFs);
+  if(r.parent)c=c.filter(p=>kin(par(p),r.parent));if(r.spouse)c=c.filter(p=>kin(sps(p),r.spouse));if(r.child)c=c.filter(p=>kin(kids(p),r.child));
+  return c.length===1?{id:c[0].id}:{err:(r.name||r.fsid)+(c.length?': more than one match':': not found')}}
+function planFixes(js){return(js.fixes||[]).map((g,i)=>{const W={},errs=[];Object.entries(g.who||{}).forEach(([k,r])=>{const x=fxFind(r);if(x.id)W[k]=x.id;else errs.push(x.err)});
+  return{n:i,label:g.label||('Fix '+(i+1)),why:g.why||'',ops:g.ops||[],W,ok:!errs.length,err:errs.join('; ')}})}
+function fxApply(g){const W=g.W;
+  const fam=fr=>{const m=Object.values(F).filter(f=>(!fr.husb||f.husb===W[fr.husb])&&(!fr.wife||f.wife===W[fr.wife])&&(!fr.child||f.chil.includes(W[fr.child])));
+    if(m.length!==1)throw new Error('family not found ('+JSON.stringify(fr)+')');return m[0]};
+  const put=f=>queue('families',f.id,famData(f));const cl=f=>JSON.parse(JSON.stringify(f));
+  const dedupe=()=>{const seen={};Object.values(F).forEach(f=>{if(!f.husb||!f.wife)return;const k=f.husb+'+'+f.wife;const a=seen[k];if(!a){seen[k]=f;return}
+    const c=cl(a);c.chil=[...new Set(c.chil.concat(f.chil))];const am=c.ev.MARR||{},fm=f.ev.MARR||{};if(!am.date&&fm.date||!am.place&&fm.place)c.ev.MARR={date:am.date||fm.date||'',place:am.place||fm.place||''};
+    put(c);queue('families',f.id,Object.assign(famData(f),{deleted:true}));seen[k]=c})};
+  for(const o of g.ops){
+    if(o.op==='merge'){if(!P[W[o.keep]]||!P[W[o.drop]])throw new Error('merge: person missing');mergeInto(W[o.keep],W[o.drop])}
+    else if(o.op==='unlinkChild'){const f=cl(fam(o.fam));f.chil=f.chil.filter(x=>x!==W[o.child]);put(f)}
+    else if(o.op==='addChild'){const f=cl(fam(o.fam));if(f.chil.some(x=>P[x]&&nrm(niceName(P[x].name))===nrm(niceName(o.person.name))))continue;
+      const nid='N:@I'+uid()+'@';queue('people',nid,Object.assign({name:'',middle:'',maiden:'',nick:'',fsid:'',sex:'U',birthDate:'',birthPlace:'',deathDate:'',deathPlace:'',deathCause:'',note:''},o.person));
+      if(window.__PERM&&window.__PERM.editable)window.__PERM.editable.add(nid);f.chil.push(nid);put(f)}
+    else if(o.op==='edit'){const p=P[W[o.who]];if(!p)throw new Error('edit: person missing');const d=Object.assign({},OV_P[p.id]||personDoc(p),o.set||{});
+      let nt=d.note||'';(o.removeNote||[]).forEach(t=>{nt=nt.split(t).join('')});nt=nt.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+      if(o.addNote&&!nrm(nt).includes(nrm(o.addNote)))nt=(nt?nt+'\n\n':'')+o.addNote;d.note=nt;queue('people',p.id,d)}
+    else if(o.op==='setFamily'){const f=cl(fam(o.fam));if('husb'in o)f.husb=o.husb?W[o.husb]:null;if('wife'in o)f.wife=o.wife?W[o.wife]:null;put(f);rebuild();dedupe()}
+    else if(o.op==='deleteEmpty'){const id=W[o.who];Object.values(F).filter(f=>!f.chil.length&&[f.husb,f.wife].filter(Boolean).length===1&&(f.husb===id||f.wife===id)).forEach(f=>queue('families',f.id,Object.assign(famData(f),{deleted:true})))}
+    else throw new Error('unknown step '+o.op);
+    rebuild()}}
+window.__planFixes=planFixes;window.__toGed=()=>toGed();
+window.__applyFixes=async groups=>{const out=[];for(const g of groups){const sp=JSON.stringify(OV_P),sf=JSON.stringify(OV_F),wl=writes.length;try{fxApply(g);out.push([g.label,''])}catch(e){out.push([g.label,(e&&e.message)||String(e)]);writes.length=wl;[[OV_P,sp],[OV_F,sf]].forEach(([o,j])=>{for(const k in o)delete o[k];Object.assign(o,JSON.parse(j))});rebuild()}}
+  render(true);await flush();return out};
 document.getElementById('gedpick').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const box=document.getElementById('im-plan');if(!box)return;
   let plan;try{plan=planImport(await f.text())}catch(err){box.innerHTML='<p class="hint">That file could not be read as GEDCOM.</p>';return}
   if(!plan.total){box.innerHTML='<p class="hint">No people found in that file.</p>';return}
@@ -1488,10 +1522,20 @@ async function openResearch(empty){
    <p class="msg" id="rmsg"></p>
    <form id="zf"><label>Record photos (.zip with manifest.json)<input id="z-file" type="file" accept=".zip,application/zip" required></label><button class="go" type="submit">Attach photos</button></form>
    <p class="msg" id="zmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
-  let zDone=false;
+  let zDone=false,fDone=false,fxRes=null;
   $('#zf').onsubmit=async e=>{e.preventDefault();const f=$('#z-file').files[0];const say=t=>$('#zmsg').textContent=t;if(!f)return;
     if(!window.__attachRecords){say('Open the tree first, then try again.');return}
     try{say('Reading the zip…');await loadJSZip();const zip=await JSZip.loadAsync(f);const mf=zip.file('manifest.json');if(!mf){say('This zip has no manifest.json.');return}
+      const fx=zip.file('fixes.json');
+      if(fx&&!fDone){if(!window.__planFixes){say('Open the tree first, then try again.');return}
+        const js=JSON.parse(await fx.async('string'));const gs=window.__planFixes(js);
+        $('#zmsg').innerHTML=`<strong>${esc(js.title||'Tree fixes')}</strong>: ${gs.length} fix${gs.length===1?'':'es'}. Untick any you don't want. Every change shows in History, where it can be undone.
+          <div class="fxl">${gs.map(g=>`<label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-weight:400"><input type="checkbox" data-fx="${g.n}"${g.ok?' checked':' disabled'} style="width:auto;margin-top:3px"><span><strong>${esc(g.label)}</strong><br><small>${esc(g.why)}${g.ok?'':'<br><em>Skipped: '+esc(g.err)+'</em>'}</small></span></label>`).join('')}</div>
+          <button class="go" type="button" id="fx-apply">Apply ticked fixes</button> <button type="button" class="lnk" id="fx-cancel">Cancel</button>`;
+        $('#fx-cancel').onclick=()=>$('#zmsg').textContent='';
+        $('#fx-apply').onclick=async()=>{const pick=[...document.querySelectorAll('[data-fx]:checked')].map(c=>gs[+c.dataset.fx]);$('#fx-apply').disabled=true;say('Applying fixes…');
+          try{fxRes=await window.__applyFixes(pick);fDone=true;$('#zf').requestSubmit()}catch(err){say('Stopped: '+((err&&err.message)||err))}};
+        return}
       const ug=zip.file('update.ged');
       if(ug&&!zDone){if(!window.__planImport){say('Open the tree first, then try again.');return}
         const plan=window.__planImport(await ug.async('string'));const lab=id=>(window.__personLabel&&window.__personLabel(id))||id;
@@ -1506,8 +1550,8 @@ async function openResearch(empty){
         return}
       const man=JSON.parse(await mf.async('string'));const types={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',pdf:'application/pdf',gif:'image/gif'};
       const items=man.items.filter(it=>zip.file(it.file)).map(it=>Object.assign({},it,{blob:async()=>new Blob([await zip.file(it.file).async('arraybuffer')],{type:types[(it.file.split('.').pop()||'').toLowerCase()]||'application/octet-stream'})}));
-      const r=await window.__attachRecords(items,(i,n)=>say('Attaching '+i+' of '+n+'…'));const wasUpd=zDone;zDone=false;
-      say((wasUpd?'Update applied. ':'')+'Done. Attached '+r.added+' photo'+(r.added===1?'':'s')+(r.skipped?', '+r.skipped+' already there':'')+(r.missing.length?'. Not found in the tree: '+r.missing.join(', '):'')+'.')}
+      const r=await window.__attachRecords(items,(i,n)=>say('Attaching '+i+' of '+n+'…'));const wasUpd=zDone;zDone=false;const fr=fxRes;fDone=false;fxRes=null;const fbad=fr?fr.filter(x=>x[1]):[];
+      say((fr?(fr.length-fbad.length)+' fix'+(fr.length-fbad.length===1?'':'es')+' applied'+(fbad.length?' ('+fbad.map(x=>x[0]+': '+x[1]).join('; ')+' not applied)':'')+'. ':'')+(wasUpd?'Update applied. ':'')+'Done. Attached '+r.added+' photo'+(r.added===1?'':'s')+(r.skipped?', '+r.skipped+' already there':'')+(r.missing.length?'. Not found in the tree: '+r.missing.join(', '):'')+'.')}
     catch(err){say('Stopped: '+((err&&err.message)||err))}};
   $('#rclose').onclick=()=>box.hidden=true;
   $('#rf').onsubmit=async e=>{e.preventDefault();const files=[...$('#r-files').files];const out=[];let next=0;
