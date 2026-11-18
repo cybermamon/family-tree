@@ -447,7 +447,7 @@ function openSheet(id){selId=id;const p=P[id];
   const pf=parentsOf(id),par=pf?[pf.husb,pf.wife].filter(Boolean):[];
   const sibs=pf?pf.chil.filter(c=>c!==id):[];
   const fams=famsOf(id);const sps=fams.map(f=>spouseIn(f,id)).filter(Boolean);const kids=fams.flatMap(f=>f.chil);
-  const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(niceName(P[spouseIn(f,id)].name))+')':''}`:'').filter(Boolean);
+  const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(plateName(P[spouseIn(f,id)]))+')':''}`:'').filter(Boolean);
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(plateName(p))}</h2>${p.nick||p.maiden?`<div class="sub">${[p.nick?'“'+esc(p.nick)+'”':'',p.maiden?(()=>{const n=nameParts(p);return 'Born '+esc(niceName(`${n.given} ${n.middle} ${p.maiden}`))})():''].filter(Boolean).join(' · ')}</div>`:''}<div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
    <div class="fsl">${p.fsid?`<a href="${esc(fsUrl(p.fsid))}" target="_blank" rel="noopener">FamilySearch ${esc(p.fsid)} ↗</a>`:`<a href="${esc(fsSearch(p))}" target="_blank" rel="noopener">Find on FamilySearch ↗</a>${canEditP(id)?' <small>then copy their ID into Edit</small>':''}`}</div>
@@ -505,9 +505,9 @@ function openForm(o){
   const b=p?(p.ev.BIRT||{}):{},d=p?(p.ev.DEAT||{}):{};
   let famPick='';
   if(o.mode==='add'&&o.rel==='child'){const fs=famsOf(o.anchor);
-    famPick=`<label>With<select id="ed-fam">${fs.map(f=>{const s=spouseIn(f,o.anchor);return`<option value="${f.id}">${s?esc(niceName(P[s].name)):'Unknown partner'}</option>`}).join('')}<option value="new">Unknown / other partner</option></select></label>`}
+    famPick=`<label>With<select id="ed-fam">${fs.map(f=>{const s=spouseIn(f,o.anchor);return`<option value="${f.id}">${s?esc(plateName(P[s])):'Unknown partner'}</option>`}).join('')}<option value="new">Unknown / other partner</option></select></label>`}
   if(o.mode==='add'&&(o.rel==='father'||o.rel==='mother')){const pf=parentsOf(o.anchor);if(pf&&pf[o.rel==='father'?'husb':'wife']){status('');sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>Already has a ${o.rel}</h2><p class="sub">Edit the existing ${o.rel} instead.</p><button class="btn" type="button" data-back="${o.anchor}">Back</button>`;return}}
-  const title=o.mode==='edit'?'Edit '+esc(niceName(p.name)):'Add '+({father:'father',mother:'mother',spouse:'spouse',child:'child',sibling:'brother or sister'}[o.rel])+' of '+esc(niceName(a.name));
+  const title=o.mode==='edit'?'Edit '+esc(plateName(p)):'Add '+({father:'father',mother:'mother',spouse:'spouse',child:'child',sibling:'brother or sister'}[o.rel])+' of '+esc(plateName(a));
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>${title}</h2>
   <form id="edform" class="form">
    ${o.mode==='add'?`<div class="exist"><label>Already in the tree? Pick them here<input id="ed-exist" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-exres" hidden></div></div>
@@ -536,9 +536,9 @@ function openForm(o){
   if(mx){const rs=document.getElementById('ed-mres'),mp=document.getElementById('ed-mpick');
     mx.addEventListener('input',()=>{const t=nrm(mx.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
       const hits=Object.values(P).filter(p=>p.id!==o.id&&canEditP(p.id)&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
-      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(plateName(p))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
     rs.addEventListener('click',e=>{const b=e.target.closest('button[data-mpick]');if(!b)return;e.stopPropagation();rs.hidden=true;const other=b.dataset.mpick;
-      const nm=id=>`<strong>${esc(niceName(P[id].name))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
+      const nm=id=>`<strong>${esc(plateName(P[id]))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
       mp.innerHTML=`Merge these two into one person? Names, dates, places, notes, relatives and files are combined. Where they disagree, the one you keep wins and the other goes into the notes. Admins can undo it from History.<br>1. ${nm(o.id)}<br>2. ${nm(other)}
         <div class="acts"><button class="btn primary" type="button" data-mk="${esc(o.id)}|${esc(other)}">Merge, prefer 1</button><button class="btn" type="button" data-mk="${esc(other)}|${esc(o.id)}">Merge, prefer 2</button></div>`;mp.hidden=false;
       mp.querySelectorAll('[data-mk]').forEach(x=>x.onclick=async ev=>{ev.stopPropagation();const[k,d]=x.dataset.mk.split('|');mp.querySelectorAll('button').forEach(y=>y.disabled=true);x.textContent='Merging…';
@@ -548,9 +548,9 @@ function openForm(o){
     const newBits=()=>[...form.querySelectorAll('.two')].concat([document.getElementById('ed-note').closest('label'),document.getElementById('ed-or')]);
     ex.addEventListener('input',()=>{const t=nrm(ex.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
       const hits=Object.values(P).filter(p=>p.id!==o.anchor&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
-      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-pick="${esc(p.id)}">${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-pick="${esc(p.id)}">${esc(plateName(p))} <small>${years(p)} · ${esc(p.src)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
     rs.addEventListener('click',e=>{const b=e.target.closest('button[data-pick]');if(!b)return;e.stopPropagation();o.existing=b.dataset.pick;rs.hidden=true;ex.closest('.exist').hidden=true;
-      const ch=document.getElementById('ed-chosen');ch.innerHTML=`Linking <strong>${esc(niceName(P[o.existing].name))}</strong> ${years(P[o.existing])} <button class="btn" type="button" id="ed-unpick">Change</button>`;ch.hidden=false;
+      const ch=document.getElementById('ed-chosen');ch.innerHTML=`Linking <strong>${esc(plateName(P[o.existing]))}</strong> ${years(P[o.existing])} <button class="btn" type="button" id="ed-unpick">Change</button>`;ch.hidden=false;
       newBits().forEach(x=>x.hidden=true);
       document.getElementById('ed-unpick').onclick=ev=>{ev.stopPropagation();o.existing=null;ch.hidden=true;ex.closest('.exist').hidden=false;ex.value='';newBits().forEach(x=>x.hidden=false)}})}
 }
@@ -628,7 +628,7 @@ document.getElementById('filepick').addEventListener('change',async e=>{const fi
   if(done){status('Saved');render(true);if(selId===pid&&!document.getElementById('edform'))openSheet(pid)}});
 const lb=document.getElementById('lb');
 function openLb(key){const m=MEDIA[key];if(!m)return;const p=P[m.person];
-  lb.innerHTML=`<div class="bar"><strong>${esc(p?niceName(p.name):'')}</strong><span style="flex:1"></span><button class="btn" type="button" data-lbclose>Close</button></div>
+  lb.innerHTML=`<div class="bar"><strong>${esc(p?plateName(p):'')}</strong><span style="flex:1"></span><button class="btn" type="button" data-lbclose>Close</button></div>
    <div class="view">${isImg(m)?`<img src="${esc(m.url)}" alt="${esc(m.caption||'')}">`:`<p>${esc(m.name||'Document')}</p>`}</div>
    <div class="bar"><input id="lb-cap" value="${esc(m.caption||'')}" aria-label="Caption" ${canEditP(m.person)?'':'readonly'}>
    ${canEditP(m.person)?'<button class="btn" type="button" data-lbsave>Save caption</button>':''}
@@ -651,7 +651,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
 function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
   const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
   const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place);if(e.cause)L.push('2 CAUS '+e.cause)};
-  Object.values(P).forEach(p=>{L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(p.name||'Unknown'));{const n=splitName(p.name);if(n.given)L.push('2 GIVN '+n.given);if(n.surname)L.push('2 SURN '+n.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
+  Object.values(P).forEach(p=>{const pn=p.maiden?(()=>{const q=nameParts(p);return `${q.given} ${p.maiden} /${q.surname}/${q.suffix?' '+q.suffix:''}`})():p.name;L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(pn||'Unknown'));{const n=splitName(p.name),pm=splitName(pn);if(pm.given)L.push('2 GIVN '+pm.given);if(pm.surname)L.push('2 SURN '+pm.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
       if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));if(p.fsid)L.push('1 _FSFTID '+p.fsid);['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
     p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
     mediaOf(p.id).forEach(m=>{L.push('1 OBJE','2 FILE '+new URL(m.url,location.href).href);if(m.caption)L.push('2 TITL '+m.caption)});
@@ -723,7 +723,7 @@ function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(B
 function showDups(){const box=document.getElementById('dup-list');const ds=findDups();
   if(!ds.length){box.innerHTML='<p class="sub">No duplicates found.</p>';return}
   box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
-   ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(niceName(p.name))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
+   ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(plateName(p))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
     <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button><button class="btn" type="button" data-apart="${esc(a.map(p=>p.id).join('|'))}">Not the same person</button></div></div>`).join('');
   box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
     ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
@@ -1023,7 +1023,7 @@ function drawTable(){const body=document.getElementById('v-body');const cols=tco
       o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();o.deathCause=g('dcause').trim();queue('people',id,o);n++}
     V.tdirty={};rebuild();render(true);await flush();drawTable();body.insertAdjacentHTML('afterbegin',`<p class="vnote"><strong>Saved ${n} ${n===1?'person':'people'}.</strong> Changes show in History.</p>`)}}
 function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
-  let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
+  let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+plateName(p)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
   const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
   ps.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*V.dir});
   const th=(k,l,c)=>`<th data-sort="${k}"${c?` class="${c}"`:''}>${l}${V.sort===k?(V.dir>0?' ▲':' ▼'):''}</th>`;
@@ -1064,7 +1064,7 @@ function drawStats(){const body=document.getElementById('v-body');const ps=scope
     ${tile('Living · Deceased',`${living} · ${dead}`,`${n-living-dead?(n-living-dead)+' unknown (no dates). ':''}Born after 1926 with no death date counts as living`)}
     ${tile('Average lifespan',avg(lsAll)!=null?avg(lsAll)+' yrs':null,`${lsAll.length} people with both years`)}
     ${tile('Men · Women lifespan',`${avg(lsM)??'–'} · ${avg(lsF)??'–'}`,'average years')}
-    ${tile('Longest life',oldest?lifespan(oldest)+' yrs':null,oldest?esc(niceName(oldest.name)):'')}
+    ${tile('Longest life',oldest?lifespan(oldest)+' yrs':null,oldest?esc(plateName(oldest)):'')}
     ${tile('Children per family',kidsAvg,`${withKids.length} families with children`)}
     ${tile('Parents’ age at a birth',`${avg(pa.M)??'–'} · ${avg(pa.F)??'–'}`,'fathers · mothers, average')}
   </div><div class="charts">
@@ -1223,8 +1223,8 @@ const q=document.getElementById('q'),res=document.getElementById('results');
 const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 
 q.addEventListener('input',()=>{const t=norm(q.value.trim());if(!t){res.hidden=true;return}
-  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name)+' '+(p.maiden||'')+' '+(p.nick||''))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
-  res.innerHTML=hits.length?hits.map(x=>`<button type="button" data-id="${x.p.id}">${esc(niceName(x.p.name))} <small>${years(x.p)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';res.hidden=false});
+  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name)+' '+plateName(p)+' '+(p.maiden||'')+' '+(p.nick||''))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
+  res.innerHTML=hits.length?hits.map(x=>`<button type="button" data-id="${x.p.id}">${esc(plateName(x.p))} <small>${years(x.p)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';res.hidden=false});
 res.addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;res.hidden=true;q.value='';q.blur();setFocus(b.dataset.id)});
 document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden=true});
 
