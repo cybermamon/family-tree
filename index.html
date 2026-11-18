@@ -909,6 +909,10 @@ const dyr=p=>{const y=+((deathOf(p).date||'').match(/\d{4}/)||[0])[0];return y||
 const lifespan=p=>{const b=byr(p),d=dyr(p);return b&&d&&d>=b&&d-b<120?d-b:null};
 const ageNow=p=>{const b=byr(p);return b&&!isDead(p)&&NOW-b<110?NOW-b:null};
 const surnameOf=p=>splitName(p.name).surname.trim();
+// related surnames shown as one family line (first name in each group is the line's label)
+const LINE_GROUPS=[['Santos','de los Santos','delos Santos','Timon','Timón'],['Guevara','Guevarra','Guivara'],['Reyes','de los Reyes','delos Reyes'],['Esguerra','Esquerra'],['Galvez','Galves'],['Fabian','Favian'],['Quijada','Quejada'],['Lansangan','Lamangan'],['Matias','Mathias'],['Vasques','Vazquez','Vasquez','Vazques'],['Coronel','Coronell']];
+const LG={};LINE_GROUPS.forEach(g=>g.forEach(n=>LG[nrm(n)]=g[0]));
+const lineOf=s=>{const k=nrm(s);return k?(LG[k]||LG[k.replace(/^(de los|delos|de la|dela|de|del) /,'')]||s.trim()):''};
 const firstOf=p=>(splitName(p.name).given.split(/\s+/)[0]||'').replace(/[^\p{L}.'-]/gu,'');
 const townOf=pl=>(pl||'').split(',')[0].trim();
 const bplace=p=>(p.ev.BIRT&&p.ev.BIRT.place)||(p.ev.CHR&&p.ev.CHR.place)||(p.ev.BAPM&&p.ev.BAPM.place)||'';
@@ -916,16 +920,16 @@ let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false,lineTo:'
 function scopePeople(){const all=Object.values(P);
   if(V.scope==='anc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);const f=parentsOf(x);if(f)st.push(f.husb,f.wife)}return all.filter(p=>s.has(p.id))}
   if(V.scope==='desc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);famsOf(x).forEach(f=>{st.push(...f.chil);const sp=spouseIn(f,x);if(sp)s.add(sp)})}return all.filter(p=>s.has(p.id))}
-  if(V.scope==='line'&&V.line){const L=nrm(V.line);return all.filter(p=>nrm(surnameOf(p))===L||nrm(p.maiden||'')===L)}
+  if(V.scope==='line'&&V.line){const L=nrm(lineOf(V.line));return all.filter(p=>nrm(lineOf(surnameOf(p)))===L||(p.maiden&&nrm(lineOf(p.maiden))===L))}
   return all}
 function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('views');box.hidden=false;sheet.hidden=true;
-  const sc={};Object.values(P).forEach(p=>{const s=surnameOf(p);if(s&&s!=='?')sc[s]=(sc[s]||0)+1});
+  const sc={},sv={};Object.values(P).forEach(p=>{const r=surnameOf(p);if(!r||r==='?')return;const s=lineOf(r);sc[s]=(sc[s]||0)+1;const v=niceName(r).trim(),vk=nrm(v);sv[s]=sv[s]||{};if(vk&&vk!==nrm(s)&&!sv[s][vk])sv[s][vk]=v});
   const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
-  if(!V.line&&lines.length)V.line=lines[0][0];
+  if(V.line)V.line=lineOf(V.line);if(!V.line&&lines.length)V.line=lines[0][0];
   const fname=P[focusId]?niceName(P[focusId].name):'this person';
   box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="table" aria-pressed="${V.tab==='table'}">Table</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button><button class="btn" type="button" data-vt="rel" aria-pressed="${V.tab==='rel'}">Relationship</button></div>
     <select id="v-scope" aria-label="Who to include"${V.tab==='line'||V.tab==='rel'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
-    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'&&V.tab!=='rel'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)} (${c})</option>`).join('')}</select>
+    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'&&V.tab!=='rel'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)}${sv[n]&&Object.keys(sv[n]).length?' / '+esc(Object.values(sv[n]).join(' / ')):''} (${c})</option>`).join('')}</select>
     ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
     ${V.tab==='table'?`<input id="t-q" type="search" placeholder="Filter rows" value="${esc(V.tq||'')}">`:''}
     <button class="btn vclose" type="button" id="v-close">Back to tree</button></div><div class="vbody" id="v-body"></div>`;
@@ -1032,7 +1036,7 @@ function drawStats(){const body=document.getElementById('v-body');const ps=scope
   </div><div class="charts">
     ${decChart}
     ${hbars(cenRows,'Average lifespan by birth century','Years lived, for people with birth and death years. The count is in brackets.')}
-    ${hbars(count(surnameOf),'Most common surnames')}
+    ${hbars(count(p=>lineOf(surnameOf(p))),'Most common family lines')}
     ${hbars(count(firstOf),'Most common first names')}
     ${hbars(count(p=>townOf(bplace(p))),'Most common birthplaces')}
     ${hbars(count(p=>isDead(p)&&causeGroup(causeOf(p)),12),'Causes of death',`${ps.filter(p=>isDead(p)&&causeOf(p)).length} of ${dead} deceased have a recorded cause, from death and burial records.`)}
@@ -1091,7 +1095,7 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
     return`<div class="lc-row"><div class="lc-gen">G${g}${gy?`<small class="lc-yr${gy.how==='b'?'':' est'}" title="${gy.how==='b'?'Birth year':gy.how==='s'?'Spouse\u2019s birth year':'Estimated'}">${gy.how==='b'?'':'c.'}${gy.y}</small>`:''}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
       <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
   const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
-  const sur=surnameOf(P[path[path.length-1]]);
+  const sur=lineOf(surnameOf(P[path[path.length-1]]));
   body.innerHTML=`<div class="lc-wrap"><div class="lc-ctl"><label class="vnote" style="margin:0">Line<select id="lc-to" style="margin-left:6px">
      <option value="father"${V.lineTo==='father'?' selected':''}>Father’s line (father to father)</option><option value="mother"${V.lineTo==='mother'?' selected':''}>Mother’s line (mother to mother)</option>
      ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})</option>`).join('')}</select></label>
