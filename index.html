@@ -1519,12 +1519,13 @@ async function openResearch(empty){
   const{data:rows,error}=await sb.from('research').select('prefix,label,updated_at,ged');
   if(error){box.querySelector('.lede').textContent=error.message;return}
   const list=rows.filter(r=>r.prefix!=='_config');
-  box.innerHTML=`<div class="card"><h1>Research data</h1><p class="lede">${empty?'The tree is empty until the research files are loaded. ':''}Upload the research GEDCOM files (santos-matias-family-tree.ged and samuel-abarabar-family-tree.ged). Uploading a newer copy replaces the old one; edits made on the site are kept. Below that, upload a record photos zip to attach the research images to each person. Running it again skips photos already attached.</p>
+  box.innerHTML=`<div class="card"><h1>Research data</h1><p class="lede">${empty?'The tree is empty until the research files are loaded. ':''}Research updates come as a zip from Claude (new people, fixes and record photos). Upload it below; you see what will change before anything is applied, and it is safe to run the same zip twice.</p>
    ${list.map(r=>`<div class="mrow"><div class="who"><strong>${esc(r.label)}</strong><small>${(r.ged.match(/ INDI/g)||[]).length} people · updated ${new Date(r.updated_at).toLocaleString()}</small></div><span></span></div>`).join('')}
+   <form id="zf"><label>Research update (.zip)<input id="z-file" type="file" accept=".zip,application/zip" required></label><button class="go" type="submit">Open zip</button></form>
+   <p class="msg" id="zmsg"></p>
+   <details style="margin-top:14px"><summary><small>Replace the base research files (rarely needed)</small></summary><p class="lede"><small>Only use this if Claude asks you to. It swaps the research GEDCOM files the tree is built on; edits made on the site are kept.</small></p>
    <form id="rf"><label>GEDCOM files<input id="r-files" type="file" accept=".ged,.txt,text/plain" multiple required></label><button class="go" type="submit">Upload</button></form>
-   <p class="msg" id="rmsg"></p>
-   <form id="zf"><label>Record photos (.zip with manifest.json)<input id="z-file" type="file" accept=".zip,application/zip" required></label><button class="go" type="submit">Attach photos</button></form>
-   <p class="msg" id="zmsg"></p><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
+   <p class="msg" id="rmsg"></p></details><div class="links"><span></span><button type="button" id="rclose">Close</button></div></div>`;
   let zDone=false,fDone=false,fxRes=null;
   $('#zf').onsubmit=async e=>{e.preventDefault();const f=$('#z-file').files[0];const say=t=>$('#zmsg').textContent=t;if(!f)return;
     if(!window.__attachRecords){say('Open the tree first, then try again.');return}
