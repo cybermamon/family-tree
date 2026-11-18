@@ -897,6 +897,7 @@ function fxApply(g){const W=g.W;
   for(const o of g.ops){
     if(o.op==='merge'){if(!P[W[o.keep]]||!P[W[o.drop]])throw new Error('merge: person missing');mergeInto(W[o.keep],W[o.drop])}
     else if(o.op==='unlinkChild'){const f=cl(fam(o.fam));f.chil=f.chil.filter(x=>x!==W[o.child]);put(f)}
+    else if(o.op==='linkChild'){const f=cl(fam(o.fam)),c=W[o.child];if(!P[c])throw new Error('child missing');if(!f.chil.includes(c)){f.chil.push(c);put(f)}}
     else if(o.op==='addChild'){const f=cl(fam(o.fam));if(f.chil.some(x=>P[x]&&nrm(niceName(P[x].name))===nrm(niceName(o.person.name))))continue;
       const nid='N:@I'+uid()+'@';queue('people',nid,Object.assign({name:'',middle:'',maiden:'',nick:'',fsid:'',sex:'U',birthDate:'',birthPlace:'',deathDate:'',deathPlace:'',deathCause:'',note:''},o.person));
       if(window.__PERM&&window.__PERM.editable)window.__PERM.editable.add(nid);f.chil.push(nid);put(f)}
