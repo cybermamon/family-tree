@@ -1272,7 +1272,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden
 window.__attachRecords=async(items,progress)=>{
   if(!db||!assets||!canEdit())throw new Error('Sign in as an editor or admin first.');
   const nm=s=>norm(niceName(s||'')).replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
-  const find=r=>{if(P[r.id])return r.id;if(r.fsid){const h=Object.values(P).find(p=>p.fsid&&p.fsid===String(r.fsid).toUpperCase());if(h)return h.id}const n=nm(r.name);const c=Object.values(P).filter(p=>nm(p.name)===n);
+  const find=r=>{if(P[r.id])return r.id;{const h=r.id&&Object.values(P).find(p=>p.srcId===r.id);if(h)return h.id}if(r.fsid){const h=Object.values(P).find(p=>p.fsid&&p.fsid===String(r.fsid).toUpperCase());if(h)return h.id}const n=nm(r.name);const c=Object.values(P).filter(p=>nm(p.name)===n);
     const y=r.year?c.filter(p=>by(p)===String(r.year)):c;const hit=y.length===1?y[0]:c.length===1?c[0]:null;return hit?hit.id:null};
   let added=0,skipped=0;const missing=[],docs=[];const t0=Date.now();
   for(let i=0;i<items.length;i++){const it=items[i];progress&&progress(i+1,items.length);
