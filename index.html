@@ -708,7 +708,7 @@ function findDups(){ // same person entered twice: first and last name match, th
     [...up1,...up2].forEach(z=>famsOf(z).forEach(f=>f.chil.forEach(c=>near.add(c))));near.delete(x.id);return sps(y).some(z=>near.has(z))}
   function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
   const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
-  const apart=(x,y)=>(x.notSame||[]).includes(y.id)||(y.notSame||[]).includes(x.id);
+  const dy=q=>+((deathOf(q).date||'').match(/\d{4}/)||[0])[0];const apart=(x,y)=>(x.notSame||[]).includes(y.id)||(y.notSame||[]).includes(x.id)||(dy(x)&&dy(y)&&Math.abs(dy(x)-dy(y))>2);
   const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(!apart(a[i],a[j])&&same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
   const seenPair=new Set(out.map(([a,b])=>[a.id,b.id].sort().join('|')));
@@ -720,16 +720,18 @@ function findDups(){ // same person entered twice: first and last name match, th
 function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
   const sp=famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean).map(x=>niceName(P[x].name));
   return [par.length?'child of '+par.join(' & '):'',sp.length?'married to '+sp.join(', '):''].filter(Boolean).join('; ')||'no relatives linked'}
-function showDups(){const box=document.getElementById('dup-list');const ds=findDups();
-  if(!ds.length){box.innerHTML='<p class="sub">No duplicates found.</p>';return}
-  box.innerHTML=`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
+function showDups(){const box=document.getElementById('dup-list');const cps=auditData().copies;const ds=findDups();
+  const cpHtml=cps.length?`<div class="dup"><strong>${cps.length} exact cop${cps.length>1?'ies':'y'} found</strong><small>Same name, sex, dates and parents, usually from a research update applied twice. Join them first; the list below then gets shorter.</small><div class="acts"><button class="btn primary" type="button" id="cp-all">Join ${cps.length} exact cop${cps.length>1?'ies':'y'}</button></div></div>`:'';
+  const wire=()=>{const b=document.getElementById('cp-all');if(b)b.onclick=async()=>{b.disabled=true;b.textContent='Joining…';cps.forEach(c=>c.fix());rebuild();render(true);await flush();showDups();box.insertAdjacentHTML('afterbegin',`<p class="sub"><strong>Joined ${cps.length} exact cop${cps.length>1?'ies':'y'}.</strong></p>`)}};
+  if(!ds.length){box.innerHTML=cpHtml+'<p class="sub">No other duplicates found.</p>';wire();return}
+  box.innerHTML=cpHtml+`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
    ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(plateName(p))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
     <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button><button class="btn" type="button" data-apart="${esc(a.map(p=>p.id).join('|'))}">Not the same person</button></div></div>`).join('');
   box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
     ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
   const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
     all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k.id]&&P[d.id]){mergeInto(k.id,d.id);rebuild()}});render(true);await flush();showDups()};
-  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)});
+  wire();box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)});
   box.querySelectorAll('[data-apart]').forEach(b=>b.onclick=async()=>{const[x,y]=b.dataset.apart.split('|');b.disabled=true;
     [[x,y],[y,x]].forEach(([a,o])=>{const p=P[a];if(!p)return;const d=Object.assign({},OV_P[a]||personDoc(p));d.notSame=[...new Set([...(p.notSame||[]),o])];queue('people',a,d)});
     rebuild();await flush();showDups()})}
