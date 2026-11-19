@@ -772,10 +772,24 @@ function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(r
     const n2=fixName(n);if(n2===p.name)return;
     out.caps.push({label:niceName(p.name)+' → '+niceName(n2)+(extra.length?' (moves “'+extra[0]+'” to notes)':''),fix:()=>{const o=Object.assign({},OV_P[p.id]||personDoc(p));o.name=n2;
       if(extra.length)o.note=[o.note||'',...extra.map(x=>x.charAt(0).toUpperCase()+x.slice(1)+'.')].filter(Boolean).join('\n\n');queue('people',p.id,o)}})});
+  // 0. exact copies: same full name, sex, birth and death, and same parents (by name); usually one research update applied twice
+  out.copies=[];{const pn=p=>[...new Set(p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+    const g={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));if(n.split(' ').length<2||/unknown/.test(n))return;const b=birthOf(p).date||'',d=deathOf(p).date||'';
+      (g[[n,p.sex,nrm(b),nrm(d)].join('|')]=g[[n,p.sex,nrm(b),nrm(d)].join('|')]||[]).push(p)});
+    const score=p=>(p.fsid?4:0)+mediaOf(p.id).length*2+p.famc.length+p.fams.length+(p.srcId?0:1)+(p.notes.length?1:0);
+    Object.values(g).forEach(a=>{if(a.length<2)return;const byP={};a.forEach(p=>{(byP[pn(p)]=byP[pn(p)]||[]).push(p)});
+      const sn=p=>[...new Set(p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+      Object.entries(byP).forEach(([k,c0])=>{if(c0.length<2)return;const dated=birthOf(c0[0]).date||deathOf(c0[0]).date;
+       const subs=(dated||k)?[c0]:Object.entries(c0.reduce((o,p)=>{const x=sn(p);(o[x]=o[x]||[]).push(p);return o},{})).filter(([x])=>x).map(([,v])=>v);
+       subs.forEach(c=>{if(c.length<2)return;
+        c.sort((x,y)=>score(y)-score(x));const keep=c[0],drops=c.slice(1).filter(p=>!(keep.notSame||[]).includes(p.id)&&!(p.notSame||[]).includes(keep.id)&&canEditP(p.id)&&(p.fsid&&keep.fsid?fsNorm(p.fsid)===fsNorm(keep.fsid):true));
+        if(!drops.length||!canEditP(keep.id))return;
+        out.copies.push({label:niceName(keep.name)+(years(keep)?' ('+years(keep)+')':'')+(k?', child of '+k.split('+').map(x=>x.replace(/\b\w/g,m=>m.toUpperCase())).join(' + '):'')+': '+(drops.length+1)+' copies',id:keep.id,
+          fix:()=>drops.forEach(d=>{if(P[keep.id]&&P[d.id]){mergeInto(keep.id,d.id);rebuild()}})})})})})}
   return out}
 function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',fsid:p.fsid||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',deathCause:(p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause)||'',note:p.notes.join('\n\n')}}
 function showClean(){const box=document.getElementById('dup-list');const A=auditData();
-  const S=[['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
+  const S=[['copies','Exact copies of the same person','Same name, sex, dates and parents. The copies are joined into one person, keeping links, photos and notes.',true],['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
     ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
     ['empty','Family links with fewer than two people','These do nothing in the tree and are removed.',true],
     ['caps','Names in lower case or ALL CAPS','Each name is changed to normal capitals. Words like de, los and y stay lower case. Anything in brackets moves to the notes.',true],
@@ -786,8 +800,8 @@ function showClean(){const box=document.getElementById('dup-list');const A=audit
       ${A[k].map((it,i)=>`<label class="cl"><input type="checkbox" data-ck="${k}:${i}"${on||it.pre?' checked':''}> ${esc(it.label)}${it.id?` <button type="button" class="lnk" data-show="${esc(it.id)}">View</button>`:''}</label>`).join('')}</div>`).join('')+
     (total?'<div class="acts"><button class="btn primary" type="button" id="clean-go">Fix selected</button></div>':'');
   box.querySelectorAll('[data-show]').forEach(b=>b.onclick=e=>{e.preventDefault();setFocus(b.dataset.show)});
-  const go=document.getElementById('clean-go');if(go)go.onclick=async()=>{const sel=[...box.querySelectorAll('[data-ck]:checked')].map(c=>c.dataset.ck.split(':'));if(!sel.length)return;
-    go.disabled=true;go.textContent='Fixing…';sel.forEach(([k,i])=>A[k][+i].fix());rebuild();render(true);await flush();showClean();
+  const go=document.getElementById('clean-go');if(go)go.onclick=async()=>{let sel=[...box.querySelectorAll('[data-ck]:checked')].map(c=>c.dataset.ck.split(':'));if(!sel.length)return;
+    go.disabled=true;go.textContent='Fixing…';const cp=sel.filter(([k])=>k==='copies');const run=cp.length?cp:sel;run.forEach(([k,i])=>A[k][+i].fix());rebuild();render(true);await flush();showClean();if(cp.length&&cp.length<sel.length)box.insertAdjacentHTML('afterbegin','<p class="sub">Copies joined first. Check the rest of the list again, then tap Fix selected.</p>');sel=run;
     box.insertAdjacentHTML('afterbegin',`<p class="sub"><strong>Fixed ${sel.length} item${sel.length>1?'s':''}.</strong></p>`)}}
 function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
   // relatives: point every family at the kept person
@@ -838,12 +852,19 @@ function planImport(text){
   const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p);});
   const byFs={},bySrc={};Object.values(P).forEach(p=>{if(p.fsid)byFs[p.fsid]=p;if(p.srcId)bySrc[p.srcId]=p});
   const toks=d=>nrm(d).split(' ').filter(Boolean);
+  const ipPar={};Object.values(IF).forEach(f=>f.chil.forEach(c=>{ipPar[c]=[...new Set((ipPar[c]?ipPar[c].split('+'):[]).concat([f.husb,f.wife].filter(x=>x&&IP[x]).map(x=>nrm(niceName(IP[x].name)))))].sort().join('+')}));
+  const exPar=p=>[...new Set(p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+  const ipSp={};Object.values(IF).forEach(f=>{[[f.husb,f.wife],[f.wife,f.husb]].forEach(([a,b])=>{if(a&&b&&IP[b])(ipSp[a]=ipSp[a]||[]).push(nrm(niceName(IP[b].name)))})});
+  const exSp=p=>p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name)));
   const map={},newP=[],fill=[],matchedList=[];let matched=0;
   Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
     if(ip.treeId&&(P[ip.treeId]||bySrc[ip.treeId]))m=P[ip.treeId]||bySrc[ip.treeId];
     else if(ip.fsid&&byFs[ip.fsid])m=byFs[ip.fsid];
     else if(upd){for(const alt of (ip.matchNames||[])){const k=nrm(alt),c=(byName[k]||[]).filter((x,i,a)=>a.indexOf(x)===i);const cy=y?c.filter(p=>!by(p)||by(p)===y):c;const pick=cy.length===1?cy[0]:c.length===1?c[0]:null;if(pick){m=pick;break}}}
-    else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
+    if(!m&&upd){const ib=(ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{}).date||'',idd=(ip.ev.DEAT||ip.ev.BURI||{}).date||'',ipn=ipPar[ip.id]||'';
+      if(n.split(' ').length>1&&(ib||idd||ipn)){const c=(byName[n]||[]).filter(p=>(p.sex===ip.sex||p.sex==='U'||ip.sex==='U')&&nrm(birthOf(p).date||'')===nrm(ib)&&nrm(deathOf(p).date||'')===nrm(idd)&&exPar(p)===ipn);if(c.length===1)m=c[0]}
+      else if(n.split(' ').length>1&&ipSp[ip.id]){const c=(byName[n]||[]).filter(p=>(p.sex===ip.sex||p.sex==='U'||ip.sex==='U')&&!birthOf(p).date&&!deathOf(p).date&&exSp(p).some(x=>ipSp[ip.id].includes(x)));if(c.length===1)m=c[0]}}
+    if(m||upd){}else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
     else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
     const b=ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{},d=ip.ev.DEAT||ip.ev.BURI||{};
     if(m){matched++;map[ip.id]=m.id;matchedList.push([niceName(ip.name),m.id]);const mb=birthOf(m),md=deathOf(m);const extra=[];
@@ -910,7 +931,7 @@ function fxApply(g){const W=g.W;
     else if(o.op==='deleteEmpty'){const id=W[o.who];Object.values(F).filter(f=>!f.chil.length&&[f.husb,f.wife].filter(Boolean).length===1&&(f.husb===id||f.wife===id)).forEach(f=>queue('families',f.id,Object.assign(famData(f),{deleted:true})))}
     else throw new Error('unknown step '+o.op);
     rebuild()}}
-window.__planFixes=planFixes;window.__toGed=()=>toGed();
+window.__planFixes=planFixes;window.__toGed=()=>toGed();window.__dbg=()=>({P,F,OV_P,OV_F,queue,rebuild,famData,personDoc,flush,auditData});
 window.__applyFixes=async groups=>{const out=[];for(const g of groups){const sp=JSON.stringify(OV_P),sf=JSON.stringify(OV_F),wl=writes.length;try{fxApply(g);out.push([g.label,''])}catch(e){out.push([g.label,(e&&e.message)||String(e)]);writes.length=wl;[[OV_P,sp],[OV_F,sf]].forEach(([o,j])=>{for(const k in o)delete o[k];Object.assign(o,JSON.parse(j))});rebuild()}}
   render(true);await flush();return out};
 document.getElementById('gedpick').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const box=document.getElementById('im-plan');if(!box)return;
