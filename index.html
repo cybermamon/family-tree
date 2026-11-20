@@ -180,7 +180,7 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .lc-card p{margin:2px 0;font-size:13px;color:var(--muted)}
 .lc-rem{border-left:2px dashed var(--border);padding-left:12px;font-size:13px;color:var(--muted)}
 .lc-rem p{margin:2px 0}.lc-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tc);border-radius:4px;padding:1px 5px;vertical-align:1px}
-.lc-src{display:block;font-size:12px;margin-top:4px;color:var(--muted);font-style:italic}.lc-src b{font-style:normal;color:var(--fg);font-weight:600}
+.lc-src{display:block;font-size:12px;margin-top:4px;color:var(--muted);font-style:italic}.lc-rank{font-style:normal;color:var(--fg)}.lc-src b{font-style:normal;color:var(--fg);font-weight:600}
 .lc-tl{margin:22px 0 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}.lc-tl h3{margin:0 0 4px;font-family:var(--font-display);font-size:18px}
 .lc-ev{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--grid);font-size:13px}.lc-ev b{font-weight:600}
 @media (max-width:600px){.lc-ev{grid-template-columns:1fr;gap:2px}}
@@ -287,6 +287,22 @@ const TNA='National Archives of the Philippines, “Descendientes de Don Carlos 
 const F2=TNA+', folder II: royal sentence (1758) in the fiscal’s suit against the descendants of Lakandula, Solimán and Matandá over their tribute exemptions, with a history of the exemptions from 1571 to 1758';
 const CHART='Santiago’s chart “Some Descendants of Rajah Solimán (1754)”. The chart has no footnote of its own; its 1754 date points to the rolls of exempted descendants that the Audiencia ordered the alcaldes mayores of Tondo, Bulacán, Pampanga and Cavite to submit from 6 Sep 1753, with the families’ own documents ('+TNA+', folders I, II and XI; note 44). Folder I is the royal order to the alcalde mayor of Bulacán to summon the descendants of Lakandula and Solimán (1740–54)';
 const VERA='Testimony in Gov. Santiago de Vera’s investigation of the 1588 “conspiracy” (Manila 1588–89), printed in Blair & Robertson, The Philippine Islands, vol. 7 pp. 95–111';
+const NOB='As a descendant of Solimán, a member of the Manila “Maginoo” royal houses, whose members were exempt from tribute, forced labor and personal services and ranked by royal order with the hidalgos of Castile (Santiago p.40)';
+const LINE_RANK={
+ 'S:@I1324@':'Not stated. Santiago gives only “Solimán (?)” as father of Rajah Solimán; later tradition makes him a ruler of Manila.',
+ 'S:@I1312@':'Rajah Muda (“young chief”) of Manila, heir of Rajah Matandá; head of the House of Solimán. His descendants held tribute exemptions until 1758 (Santiago pp.40, 42–43, 65).',
+ 'S:@I1323@':'Member of the royal house of Manila (brother of Rajah Solimán). Title and community not stated.',
+ 'S:@I1311@':'Don. Chief (datu, principal) of Tondo; adopted into the House of Solimán. Exempt from tribute; exemption lost in 1588, restored 21 Apr 1595, reconfirmed 1605. In 1724 his male descendants’ exemption was limited to forced labor and manual work (Santiago pp.42, 44, 50, 61).',
+ 'S:@I1310@':'Don. Chief of Tondo, like his father. Exempt from tribute; restored 21 Apr 1595 (Santiago pp.42, 44, 50).',
+ 'S:@I1309@':'Doña (noble title on Santiago’s chart). Office and community not stated. '+NOB+'.',
+ 'S:@I1308@':'Don. Office and community not stated. '+NOB+'.',
+ 'S:@I1307@':'Don. Office and community not stated. His sons Sebastián Baltazar, Nicolás Pérez and Melchor de los Reyes had total tribute exemptions restored in 1729–30 as descendants of Tuambasán (Santiago p.61).',
+ 'S:@I1305@':'Don. Office and community not stated. '+NOB+'.',
+ 'S:@I1306@':'Doña. Office and community not stated.',
+ 'S:@I1303@':'Don. Total tribute exemption restored 9 Nov 1729 as a descendant of Tuambasán (Santiago p.61), if he is the same man (PROBABLE). In Hagonoy, baptisms of 1775–85 name a “Barangay de D. Nicolás Pérez”, so a Don Nicolás Pérez headed a barangay there as cabeza de barangay (he or a namesake). From 1740–54 the Solimán descendants of Bulacán were summoned to prove their exemptions (folder I).',
+ 'S:@I1304@':'Not stated (she is not on Santiago’s chart).',
+ 'S:@I1198@':'Not stated in the Hagonoy records found so far. Not the same man as Don Melchor de los Reyes, son of Lucas Balthazar (exempted 1730).',
+};
 const LINE_SRC={
  'S:@I1311@':'Adoption and the 1588 revolt: '+F2+'; and '+VERA+' (notes 16–17). Exile and restoration of 21 Apr 1595 (Gov. Luis Pérez Dasmariñas) and 17 Mar 1605 (Gov. Pedro de Acuña): the same folder II (note 24).',
  'S:@I1310@':'Exile and restoration of 21 Apr 1595: '+F2+' (notes 17, 24). “Chief of Tondo”: '+VERA+'.',
@@ -297,7 +313,7 @@ const LINE_SRC={
  'S:@I1306@':CHART+'.',
  'S:@I1303@':CHART+'. The 9 Nov 1729 exemption of Don Nicolás Pérez (Gov. Fernando Valdés Tamón): '+F2+' (note 40). The link to Melchor rests on Hagonoy baptism 66XP-K4R8, not on Santiago.',
 };
-const lineInfo=p=>{if(!p)return null;const r=LINE_INFO.find(x=>x[0].some(k=>k===p.id||k===p.srcId||k===p.fsid));return r?{label:r[1],text:r[2],src:LINE_SRC[r[0][0]]||''}:null};
+const lineInfo=p=>{if(!p)return null;const r=LINE_INFO.find(x=>x[0].some(k=>k===p.id||k===p.srcId||k===p.fsid));return r?{label:r[1],text:r[2],src:LINE_SRC[r[0][0]]||'',rank:LINE_RANK[r[0][0]]||''}:null};
 const LINE_TIMELINE=[
  ['Before 1571','SOURCED','Rajah Solimán rules Manila. He adopts the three sons of his dead brother: Agustín de Legazpi, Gabriel Tuambasán and Jerónimo Bassi ('+SANT+' pp.42–44).'],
  ['1588','SOURCED','Revolt of the Lakans. Agustín and Jerónimo are executed; Gabriel Tuambasán, chief of Tondo, and his son Francisco Acta are exiled to New Spain for four years (pp.47, 50). Source: '+VERA+'; '+TNA+', folder II (notes 16–17).'],
@@ -1223,7 +1239,7 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
     if(!child&&!l1&&p)lines.push(esc(life(p)||''));
     const rem=[];if(sp&&pars(sp))rem.push(`${first(sp)}’s parents: <strong>${pars(sp)}</strong>`);
     const oth=famsOf(id).filter(f=>f!==fam&&spouseIn(f,id)).map(f=>esc(plateName(P[spouseIn(f,id)])));if(child&&oth.length)rem.push(`${first(id)} also married ${oth.join(', ')}`);
-    const li=lineInfo(p);if(li){rem.push(tagHtml(li.label)+' '+esc(li.text));if(li.src)rem.push('<span class="lc-src"><b>Santiago’s source:</b> '+esc(li.src)+'</span>')}else{const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note))}
+    const li=lineInfo(p);if(li){rem.push(tagHtml(li.label)+' '+esc(li.text));if(li.rank)rem.push('<span class="lc-src lc-rank"><b>Rank and community:</b> '+esc(li.rank)+'</span>');if(li.src)rem.push('<span class="lc-src"><b>Santiago’s source:</b> '+esc(li.src)+'</span>')}else{const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note))}
     return`<div class="lc-row"><div class="lc-gen">G${g}${gy?`<small class="lc-yr${gy.how==='b'?'':' est'}" title="${gy.how==='b'?'Birth year':gy.how==='s'?'Spouse\u2019s birth year':'Estimated'}">${gy.how==='b'?'':'c.'}${gy.y}</small>`:''}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
       <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
   const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
