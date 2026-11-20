@@ -174,6 +174,7 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .lc-card p{margin:2px 0;font-size:13px;color:var(--muted)}
 .lc-rem{border-left:2px dashed var(--border);padding-left:12px;font-size:13px;color:var(--muted)}
 .lc-rem p{margin:2px 0}.lc-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tc);border-radius:4px;padding:1px 5px;vertical-align:1px}
+.lc-src{display:block;font-size:12px;margin-top:4px;color:var(--muted);font-style:italic}.lc-src b{font-style:normal;color:var(--fg);font-weight:600}
 .lc-tl{margin:22px 0 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}.lc-tl h3{margin:0 0 4px;font-family:var(--font-display);font-size:18px}
 .lc-ev{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--grid);font-size:13px}.lc-ev b{font-weight:600}
 @media (max-width:600px){.lc-ev{grid-template-columns:1fr;gap:2px}}
@@ -249,17 +250,32 @@ const LINE_INFO=[
  [['S:@I1304@','PM6G-9ZW'],'PROBABLE','Mother of Melchor Pérez in his baptism, 14 Dec 1737, Hagonoy (index 66XP-K4R8). She is not on Santiago’s chart.'],
  [['S:@I1198@','P65V-RWH'],'PROBABLE','Probably the Melchor baptized 14 Dec 1737 in Hagonoy, son of Nicolás Pérez and Andrea Thomasina (66XP-K4R8); buried 22 Apr 1794, Hagonoy. From here down, the line is in Hagonoy church records.'],
 ];
-const lineInfo=p=>{if(!p)return null;const r=LINE_INFO.find(x=>x[0].some(k=>k===p.id||k===p.srcId||k===p.fsid));return r?{label:r[1],text:r[2]}:null};
+const TNA='National Archives of the Philippines, “Descendientes de Don Carlos Lacandola” (1748–1885)';
+const F2=TNA+', folder II: royal sentence (1758) in the fiscal’s suit against the descendants of Lakandula, Solimán and Matandá over their tribute exemptions, with a history of the exemptions from 1571 to 1758';
+const CHART='Santiago’s chart “Some Descendants of Rajah Solimán (1754)”. The chart has no footnote of its own; its 1754 date points to the rolls of exempted descendants that the Audiencia ordered the alcaldes mayores of Tondo, Bulacán, Pampanga and Cavite to submit from 6 Sep 1753, with the families’ own documents ('+TNA+', folders I, II and XI; note 44). Folder I is the royal order to the alcalde mayor of Bulacán to summon the descendants of Lakandula and Solimán (1740–54)';
+const VERA='Testimony in Gov. Santiago de Vera’s investigation of the 1588 “conspiracy” (Manila 1588–89), printed in Blair & Robertson, The Philippine Islands, vol. 7 pp. 95–111';
+const LINE_SRC={
+ 'S:@I1311@':'Adoption and the 1588 revolt: '+F2+'; and '+VERA+' (notes 16–17). Exile and restoration of 21 Apr 1595 (Gov. Luis Pérez Dasmariñas) and 17 Mar 1605 (Gov. Pedro de Acuña): the same folder II (note 24).',
+ 'S:@I1310@':'Exile and restoration of 21 Apr 1595: '+F2+' (notes 17, 24). “Chief of Tondo”: '+VERA+'.',
+ 'S:@I1309@':CHART+'.',
+ 'S:@I1308@':CHART+'.',
+ 'S:@I1307@':CHART+'. The 1729–30 exemptions, granted by Gov. Fernando Valdés Tamón: '+F2+' (note 40).',
+ 'S:@I1305@':CHART+'.',
+ 'S:@I1306@':CHART+'.',
+ 'S:@I1303@':CHART+'. The 9 Nov 1729 exemption of Don Nicolás Pérez (Gov. Fernando Valdés Tamón): '+F2+' (note 40). The link to Melchor rests on Hagonoy baptism 66XP-K4R8, not on Santiago.',
+};
+const lineInfo=p=>{if(!p)return null;const r=LINE_INFO.find(x=>x[0].some(k=>k===p.id||k===p.srcId||k===p.fsid));return r?{label:r[1],text:r[2],src:LINE_SRC[r[0][0]]||''}:null};
 const LINE_TIMELINE=[
  ['Before 1571','SOURCED','Rajah Solimán rules Manila. He adopts the three sons of his dead brother: Agustín de Legazpi, Gabriel Tuambasán and Jerónimo Bassi ('+SANT+' pp.42–44).'],
- ['1588','SOURCED','Revolt of the Lakans. Agustín and Jerónimo are executed; Gabriel Tuambasán, chief of Tondo, and his son Francisco Acta are exiled to New Spain for four years (pp.47, 50).'],
- ['21 Apr 1595','SOURCED','Gabriel’s and Francisco’s tribute exemptions are restored; reconfirmed 17 Mar 1605 (p.50).'],
+ ['1588','SOURCED','Revolt of the Lakans. Agustín and Jerónimo are executed; Gabriel Tuambasán, chief of Tondo, and his son Francisco Acta are exiled to New Spain for four years (pp.47, 50). Source: '+VERA+'; '+TNA+', folder II (notes 16–17).'],
+ ['21 Apr 1595','SOURCED','Gabriel’s and Francisco’s tribute exemptions are restored; reconfirmed 17 Mar 1605 (p.50). Source: '+TNA+', folder II (note 24).'],
  ['c.1600–1720','SOURCED','Lucía Gutiérrez → Diego de Legazpi → Lucas Balthazar → Mathías Pérez. Known only from Santiago’s 1754 chart, with no dates or places (p.51).'],
- ['1729–1730','SOURCED','Exemptions restored to Tuambasán’s descendants, among them Don Nicolás Pérez, Don Sebastián Baltazar (9 Nov 1729) and Don Melchor de los Reyes (3 Sep 1730) (p.61).'],
+ ['1729–1730','SOURCED','Exemptions restored to Tuambasán’s descendants, among them Don Nicolás Pérez, Don Sebastián Baltazar (9 Nov 1729) and Don Melchor de los Reyes (3 Sep 1730) (p.61). Source: '+TNA+', folder II (note 40).'],
  ['1720s–1730s','ESTIMATE','The family is probably settled in Hagonoy by now; when they arrived is not known.'],
  ['14 Dec 1737','PROBABLE','Melchor Pérez is baptized in Hagonoy, son of Nicolás Pérez and Andrea Thomasina (66XP-K4R8). The record is real; that this Nicolás is Santiago’s Don Nicolás is probable.'],
  ['1740–1754','SOURCED','A royal order tells the alcalde mayor of Bulacán to summon the descendants of Lakandula and Solimán (National Archives, “Descendientes de Don Carlos Lacandola”, folder I; Santiago p.41).'],
- ['1758','SOURCED','The houses of Solimán and Matandá lose their tribute exemptions; only the Lakandulas keep theirs (p.65).'],
+ ['6 Sep 1753','SOURCED','The Audiencia orders the alcaldes mayores of Tondo, Bulacán, Pampanga and Cavite to list every exempted descendant of Lakandula and Solimán and summon them with their documents. The 1754 chart of Solimán’s descendants most likely comes from these rolls (p.64; '+TNA+', folders I, II and XI, note 44).'],
+ ['1758','SOURCED','The houses of Solimán and Matandá lose their tribute exemptions; only the Lakandulas keep theirs (p.65). Source: '+TNA+', folder II.'],
  ['1775–1785','FOUND','Hagonoy baptisms name a “Barangay de D. Nicolás Pérez”.'],
  ['22 Apr 1794','FOUND','Melchor Pérez is buried in Hagonoy (XW3L-B62V).'],
  ['Above Solimán','UNVERIFIED','“Soliman III / Sulaiman II / Suleiman I” and all their FamilySearch dates are family legend. Santiago shows the two generations above Rajah Solimán only as “Solimán (?)”, with no dates.'],
@@ -1174,7 +1190,7 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
     if(!child&&!l1&&p)lines.push(esc(life(p)||''));
     const rem=[];if(sp&&pars(sp))rem.push(`${first(sp)}’s parents: <strong>${pars(sp)}</strong>`);
     const oth=famsOf(id).filter(f=>f!==fam&&spouseIn(f,id)).map(f=>esc(plateName(P[spouseIn(f,id)])));if(child&&oth.length)rem.push(`${first(id)} also married ${oth.join(', ')}`);
-    const li=lineInfo(p);if(li)rem.push(tagHtml(li.label)+' '+esc(li.text));else{const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note))}
+    const li=lineInfo(p);if(li){rem.push(tagHtml(li.label)+' '+esc(li.text));if(li.src)rem.push('<span class="lc-src"><b>Santiago’s source:</b> '+esc(li.src)+'</span>')}else{const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note))}
     return`<div class="lc-row"><div class="lc-gen">G${g}${gy?`<small class="lc-yr${gy.how==='b'?'':' est'}" title="${gy.how==='b'?'Birth year':gy.how==='s'?'Spouse\u2019s birth year':'Estimated'}">${gy.how==='b'?'':'c.'}${gy.y}</small>`:''}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
       <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
   const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
