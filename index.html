@@ -874,12 +874,14 @@ function planImport(text){
         if(ta.every(t=>tb.includes(t)))return bb;if(tb.every(t=>ta.includes(t)))return a;extra.push(label+' previously recorded as '+fmtDate(a));return bb};
       const pl=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';const x=nrm(a),z=nrm(bb);if(x===z||x.includes(z))return a;if(z.includes(x))return bb;extra.push(label+' previously recorded as '+a);return bb};
       let name=m.name;if(upd&&ip.rename&&nrm(niceName(ip.name))!==nrm(niceName(m.name))){name=ip.name;extra.push('Previously recorded as '+niceName(m.name)+'.')}
-      const old=m.notes.join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
+      // a new status note (SOURCED:, PROBABLE:, UNVERIFIED...) replaces the old status note instead of sitting under it
+      const ST=/^\s*(UNVERIFIED|PROBABLE|SOURCED|CONFIRMED|VERIFIED)\b/i,newSt=upd&&ip.notes.some(t=>ST.test(t||''));
+      const old=(newSt?m.notes.join('\n\n').split(/\n{2,}/).filter(t=>!ST.test(t)):m.notes).join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
       const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',fsid:(upd&&ip.fsid)||m.fsid||ip.fsid||'',sex:m.sex!=='U'?m.sex:ip.sex,
         birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place'),deathCause:(upd&&d.cause)||md.cause||d.cause||''};
-      o.note=upd?[old,...add,...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
+      o.note=upd?[...add.filter(t=>newSt&&ST.test(t)),old,...add.filter(t=>!(newSt&&ST.test(t))),...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
       if(o.middle===undefined)delete o.middle;
-      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',old].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
+      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',m.notes.join('\n\n')].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
     else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',srcId:ip.treeId||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
   const famW=[];let famNew=0,famUpd=0;
