@@ -1,0 +1,1276 @@
+<title>Solimán study tree</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: full-screen pannable tree canvas under a slim toolbar; person sheet slides up from the bottom (side on desktop). */
+:root{
+  --bg:#e9ede6; --grid:#dde3d9; --fg:#1f2a24; --muted:#5d6b62; --line:#6f7d74;
+  --panel:#fbfcfa; --border:#c9d1c6; --accent:#2f6b4f; --accent-fg:#fff;
+  --m-top:#dcebf7; --m-bot:#b9d6ee; --m-edge:#8fb3d3;
+  --f-top:#fbe4ee; --f-bot:#f2c4d8; --f-edge:#d99ab6;
+  --u-top:#eef0ec; --u-bot:#d9ddd6; --u-edge:#aab3a6;
+  --focus:#e0a526; --sil:#9aa39c;
+  --font-ui:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-display:"Fraunces",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161c19; --grid:#1d2420; --fg:#e4ebe6; --muted:#9aa89f; --line:#7d8c83;
+  --panel:#1f2622; --border:#334039; --accent:#6fbf96; --accent-fg:#0f1a14;
+  --m-top:#294259; --m-bot:#1f3447; --m-edge:#4d7395;
+  --f-top:#4f2c3c; --f-bot:#3e2230; --f-edge:#8a5470;
+  --u-top:#2c332f; --u-bot:#232925; --u-edge:#4b564f;
+  --focus:#f0b93d; --sil:#7d877f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161c19; --grid:#1d2420; --fg:#e4ebe6; --muted:#9aa89f; --line:#7d8c83;
+  --panel:#1f2622; --border:#334039; --accent:#6fbf96; --accent-fg:#0f1a14;
+  --m-top:#294259; --m-bot:#1f3447; --m-edge:#4d7395;
+  --f-top:#4f2c3c; --f-bot:#3e2230; --f-edge:#8a5470;
+  --u-top:#2c332f; --u-bot:#232925; --u-edge:#4b564f;
+  --focus:#f0b93d; --sil:#7d877f; color-scheme:dark}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);display:flex;flex-direction:column;overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--border);position:relative;z-index:5}
+h1{font-family:var(--font-display);font-size:1.15rem;margin:0;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.search{position:relative;flex:1 1 180px;min-width:0;max-width:280px}
+.search input{width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.results{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:50vh;overflow:auto;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.results button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:none;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.results button:hover,.results button:focus{background:var(--bg)}
+.results small{color:var(--muted)}
+label.gen{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);cursor:pointer}
+.btn:focus-visible,select:focus-visible,.person:focus-visible,.search input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#scroller{flex:1;overflow:auto;position:relative;touch-action:pan-x pan-y;background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:22px 22px}
+#sizer{position:relative}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0}
+#stage svg{position:absolute;left:0;top:0;overflow:visible}
+#stage path{fill:none;stroke:var(--line);stroke-width:1.4}
+.person{position:absolute;box-sizing:border-box;display:flex;gap:8px;align-items:flex-start;padding:6px 8px 6px 6px;border:1px solid var(--u-edge);border-radius:4px;background:linear-gradient(var(--u-top),var(--u-bot));color:var(--fg);font:inherit;text-align:left;cursor:pointer;overflow:hidden}
+.person.M{border-color:var(--m-edge);background:linear-gradient(var(--m-top),var(--m-bot))}
+.person.F{border-color:var(--f-edge);background:linear-gradient(var(--f-top),var(--f-bot))}
+.person.focus{box-shadow:0 0 0 3px var(--focus)}
+.person.sel{outline:2px solid var(--accent);outline-offset:2px}
+.person .ph{flex:0 0 38px;height:46px;border-radius:2px;background:var(--bg);display:grid;place-items:center;position:relative;overflow:hidden}
+.person .ph svg{width:30px;height:38px;fill:var(--sil)}
+.person .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.person.dec .ph::before{z-index:1}
+#sheet .avatar{float:right;width:72px;height:88px;object-fit:cover;border-radius:6px;margin:34px 0 8px 12px;border:1px solid var(--border)}
+.person.dec .ph::before{content:"";position:absolute;left:-9px;top:4px;width:30px;height:6px;background:var(--fg);transform:rotate(-45deg);opacity:.85}
+.person .tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.person .nm{font-size:13px;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.person .yr{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.more{position:absolute;font-size:10px;line-height:1;padding:3px 6px;border-radius:9px;background:var(--accent);color:var(--accent-fg);font-weight:600;pointer-events:none}
+.zoom{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;z-index:6}
+.zoom .btn{width:40px;height:40px;font-size:18px;background:var(--panel);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+#sheet{position:fixed;z-index:15;background:var(--panel);border:1px solid var(--border);box-shadow:0 -8px 30px rgba(0,0,0,.18);overflow:auto;left:0;right:0;bottom:0;max-height:62vh;border-radius:14px 14px 0 0;padding-block:14px calc(18px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:760px){#sheet{left:auto;top:64px;bottom:16px;right:16px;width:340px;max-height:none;border-radius:12px;padding:16px}}
+#sheet h2{font-family:var(--font-display);font-size:1.3rem;margin:0 32px 2px 0;text-wrap:balance;font-weight:600}
+#sheet .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+#sheet dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0 0 12px;font-size:14px}
+#sheet dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+#sheet dd{margin:0;min-width:0}
+#sheet .rel{display:flex;flex-wrap:wrap;gap:6px}
+#sheet .rel button{font:inherit;font-size:13px;padding:4px 8px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer}
+#sheet .note{font-size:13px;line-height:1.5;color:var(--fg);white-space:pre-wrap;border-top:1px solid var(--border);padding-top:10px;margin-top:6px}
+#sheet .close{position:absolute;right:10px;top:10px;width:32px;height:32px;border-radius:50%}
+#sheet .primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;padding:8px 12px;margin-bottom:12px}
+#sheet .acts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#sheet .acts .primary{margin-bottom:0}
+.form{display:flex;flex-direction:column;gap:10px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.form input,.form select,.form textarea,#ex-text{font:inherit;font-size:15px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box;min-width:0}
+#sheet h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 0 6px;font-weight:600}
+.exist{position:relative}
+.dup{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.dup small{color:var(--muted)}
+.dup .acts{margin:4px 0 0}
+#ed-chosen{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--fg)}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+.relrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px}
+.fh{font-size:11px;color:var(--muted);font-weight:400;line-height:1.3}
+.btn.danger{color:#b3261e;border-color:#b3261e;background:none}
+.files{border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
+.files h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-bottom:8px}
+.thumb{display:flex;flex-direction:column;gap:4px;padding:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer;overflow:hidden;text-align:left}
+.thumb img,.thumb .doc{width:100%;aspect-ratio:1;object-fit:cover;display:block;max-width:100%}
+.thumb .doc{display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--muted);background:var(--panel)}
+.thumb span.cap{font-size:11px;padding:0 6px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.person .clip{position:absolute;right:6px;bottom:5px;font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:2px}
+.person .clip svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2}
+#lb{position:fixed;inset:0;z-index:30;background:rgba(10,14,12,.92);display:flex;flex-direction:column;padding-block:calc(12px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));gap:10px}
+#lb .view{flex:1;min-height:0;display:grid;place-items:center;overflow:auto}
+#lb img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+#lb .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#eef2ef}
+#lb .bar input{flex:1 1 160px;min-width:0;font:inherit;font-size:15px;padding:7px 9px;border-radius:8px;border:1px solid #55605a;background:#1c2320;color:#eef2ef}
+#lb .btn{background:#1c2320;color:#eef2ef;border-color:#55605a}
+#lb a.btn{text-decoration:none}
+#lb .btn.danger{color:#ff8a80;border-color:#ff8a80}
+@media (prefers-reduced-motion:no-preference){.person{transition:box-shadow .15s}}
+
+/* list + stats overlay */
+#views{position:fixed;inset:0;z-index:25;background:var(--bg);display:flex;flex-direction:column}
+#views[hidden]{display:none}
+#views .vbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--border);background:var(--panel)}
+#views .tabs{display:flex;gap:4px}
+#views .tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+#views select,#views input{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);min-width:0}
+#views .vbody{flex:1;overflow:auto;padding:12px max(16px,env(safe-area-inset-left,0px)) 40px}
+#views .vclose{margin-left:auto}
+.ptable{width:100%;border-collapse:collapse;font-size:14px}
+.ptable th{position:sticky;top:-12px;background:var(--bg);text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:8px 6px;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap}
+.ptable td{padding:8px 6px;border-bottom:1px solid var(--grid);vertical-align:top}
+.ptable tr[data-id]{cursor:pointer}.ptable tr[data-id]:hover td{background:var(--panel)}
+.ptable .sx{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.ptable small{color:var(--muted)}
+@media (max-width:640px){.ptable .hide-s{display:none}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
+.tile .k{font-size:12px;color:var(--muted)}.tile .v{font-size:24px;font-weight:600;margin-top:2px}.tile .d{font-size:12px;color:var(--muted);margin-top:2px}
+.split{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;margin-top:8px}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.chart{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
+.chart h3{margin:0 0 10px;font-size:14px}
+.hbar{display:grid;grid-template-columns:minmax(80px,38%) 1fr 34px;gap:6px;align-items:center;font-size:13px;margin:4px 0}
+.hbar .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hbar .n{text-align:right;color:var(--muted)}
+.hbar .b{height:12px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.cols{display:flex;align-items:flex-end;gap:2px;height:140px;border-bottom:1px solid var(--border)}
+.cols .c{flex:1;background:var(--accent);border-radius:4px 4px 0 0;min-height:1px;position:relative}
+.cols .c:hover{opacity:.8}
+.colx{display:flex;gap:2px;font-size:11px;color:var(--muted);margin-top:4px}.colx span{flex:1;min-width:0;white-space:nowrap;overflow:visible}
+.vnote{color:var(--muted);font-size:12px;margin:14px 0 0}
+
+.rl-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;max-width:760px}
+.rl-pick .exist{position:relative}.rl-pick label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.rl-pick .results{position:absolute;left:0;right:0;top:100%;z-index:3;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-height:260px;overflow:auto}
+.rl-pick .results button{display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid var(--grid);background:none;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.rl-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;max-width:760px}
+.rl-card h3{margin:0 0 4px;font-family:var(--font-display);font-size:19px}
+.rl-card .why{font-size:13px;color:var(--muted);margin:0 0 10px}
+.rl-tree{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.rl-top{grid-column:1/-1;justify-self:center;text-align:center}
+.rl-col{display:flex;flex-direction:column;align-items:center;gap:0}
+.rl-chip{all:unset;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;text-align:center;max-width:100%}
+.rl-chip.end{border:2px solid var(--accent);font-weight:600}
+.rl-chip small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.rl-arrow{color:var(--muted);font-size:12px;line-height:1;padding:3px 0}
+.rl-steps{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+@media (max-width:600px){.rl-pick{grid-template-columns:1fr}}
+.lc-wrap{max-width:1000px;margin:0 auto}
+.lc-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.lc-row{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,.8fr);gap:12px;align-items:center}
+.lc-gen{font-size:12px;font-weight:600;color:var(--muted);text-align:center}
+.lc-card{background:var(--panel);border:2px solid var(--accent);border-radius:12px;padding:12px 14px}
+.lc-card.me{background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.lc-card h4{margin:0 0 6px;font-family:var(--font-display);font-size:18px;font-weight:600;line-height:1.25}
+.lc-card h4 button{all:unset;cursor:pointer}.lc-card h4 button:hover{text-decoration:underline}
+.lc-card h4 .plus{color:var(--muted);font-weight:400;margin:0 6px}
+.lc-card p{margin:2px 0;font-size:13px;color:var(--muted)}
+.lc-rem{border-left:2px dashed var(--border);padding-left:12px;font-size:13px;color:var(--muted)}
+.lc-rem p{margin:2px 0}.lc-rem strong{color:var(--fg);font-weight:600}
+.lc-link{height:22px;margin-left:calc(34px + 12px);width:calc((100% - 46px) * .555);display:flex;justify-content:center}
+.lc-link span{width:2px;background:var(--accent)}
+@media (max-width:700px){.lc-row{grid-template-columns:26px 1fr}.lc-rem{grid-column:2;margin-top:-4px;margin-bottom:4px}.lc-link{width:calc(100% - 38px);margin-left:38px}}
+@media print{header,#views .vbar,.zoom,#sheet,.lc-ctl{display:none!important}#views{position:static}#views .vbody{overflow:visible}}
+
+.cl{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px}.cl input{margin-top:3px}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.tcols{display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px 0;padding:8px;border:1px solid var(--line,#8884);border-radius:8px}
+.tscroll{overflow-x:auto;max-width:100%}.etable td{padding:2px 4px}.etable{width:auto}.etable td{white-space:nowrap}.etable input,.etable select{box-sizing:border-box;width:var(--w,120px)!important;min-width:0!important;margin:0!important;font:inherit;font-size:14px!important;padding:5px 6px!important;border:1px solid transparent!important;border-radius:4px;background:transparent!important;color:inherit;height:auto!important}
+.etable select{width:58px!important;padding:5px 2px!important}.etable tr:hover input{border-color:var(--grid)!important}
+.etable input:focus,.etable select:focus{border-color:var(--accent)!important;outline:none;background:var(--panel)!important}.etable td.ro{opacity:.65;font-size:13px;min-width:90px}.etable td.dirty input,.etable td.dirty select{background:rgba(220,170,40,.22)!important}
+.fsl{margin:4px 0 8px;font-size:14px}.fsl a{color:var(--accent)}
+.lc-yr{display:block;font-size:11px;font-weight:500;margin-top:2px;opacity:.85}.lc-yr.est{font-style:italic;opacity:.7}
+</style>
+
+<header>
+  <h1>Solimán study tree</h1>
+  <span class="meta" id="meta"></span>
+  <div class="tools">
+    <div class="search">
+      <input id="q" type="search" placeholder="Find a person…" autocomplete="off" aria-label="Find a person">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <label class="gen">Up <select id="up"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>15</option><option>20</option></select></label>
+    <label class="gen">Down <select id="down"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>10</option><option>12</option></select></label>
+    <button class="btn" id="home" type="button">Home</button>
+    <button class="btn" id="views-open" type="button">List, stats &amp; birthdays</button>
+    <button class="btn" id="export" type="button">GEDCOM</button>
+    <span class="meta" id="savestate" aria-live="polite"></span>
+  </div>
+</header>
+<div style="padding:8px 16px;font-size:13px;background:var(--panel);border-bottom:1px solid var(--border);color:var(--muted)">Reference tree rebuilt from the charts in L. P. R. Santiago, &ldquo;The Houses of Lakandula, Matand&aacute; and Solim&aacute;n (1571&ndash;1898)&rdquo;, <i>Philippine Quarterly of Culture and Society</i> 18 (1990): 39&ndash;73. Page numbers are in each person&rsquo;s notes. Only the Tuamb&aacute;san &rarr; Nicol&aacute;s P&eacute;rez line is linked to our family, and that link is still probable, not proven. <a href="../" style="color:var(--accent)">Back to our family tree</a></div>
+<div id="scroller"><div id="sizer"><div id="stage"><svg id="lines"></svg></div></div></div>
+<div class="zoom"><button class="btn" id="zin" type="button" aria-label="Zoom in">+</button><button class="btn" id="zout" type="button" aria-label="Zoom out">−</button></div>
+<aside id="sheet" hidden></aside>
+<div id="views" hidden role="dialog" aria-label="List and stats"></div>
+<div id="lb" hidden role="dialog" aria-label="Attachment"></div>
+<input type="file" id="filepick" accept="image/*,application/pdf" multiple hidden>
+<input type="file" id="gedpick" accept=".ged,.txt,text/plain" hidden>
+
+<script>
+const DATA = {"sources": [{"prefix": "R", "label": "Santiago 1990 study", "ged": "0 HEAD\n1 SOUR STUDY\n2 NAME Santiago 1990 study set\n1 GEDC\n2 VERS 5.5.1\n2 FORM LINEAGE-LINKED\n1 CHAR UTF-8\n1 NOTE Study set rebuilt from the genealogical charts and text of Luciano P. R. Santiago, \"The Houses of Lakandula, Matandá and Solimán (1571-1898): Genealogy and Group Identity\", Philippine Quarterly of Culture and Society 18 (1990): 39-73. NOT part of the family tree. Names as printed (D./Da. = Don/Doña). No dates except those printed.\n0 @S1@ SOUR\n1 TITL Santiago, Luciano P. R. \"The Houses of Lakandula, Matandá and Solimán (1571-1898): Genealogy and Group Identity.\" Philippine Quarterly of Culture and Society 18, no. 1 (1990): 39-73. JSTOR 29791998.\n0 @I1@ INDI\n1 NAME Solimán (?), the elder\n1 SEX M\n1 NOTE name conjectural\n1 NOTE Common ancestor drawn by Santiago with a question mark; father of Rajah Ache, of the father of Rajah Solimán, and of Lakandula per the chart lines. Text p.42 says Lakandula was \"most probably also their brother or first cousin\". Pigafetta (1521) called Ache \"son of the king of Luzon\" and grandson of Siripada/Bulkeiah of Brunei.\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F1@\n0 @I2@ INDI\n1 NAME Rajah or Ladia Ache (Rahang Matandá)\n1 SEX M\n1 NOTE House I. Captured as a young prince at Brunei by Magellan's fleet 1521 (Pigafetta). Called \"Raja Ache el Viejo\". Adopted his nephew Solimán as heir. p.42\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F2@\n1 FAMC @F1@\n0 @I3@ INDI\n1 NAME D. Ambrosio Mag-isá\n1 SEX M\n1 NOTE Matandá's own son; \"Mag-isá\" = alone, possibly an only child. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F3@\n1 FAMC @F2@\n0 @I4@ INDI\n1 NAME Da. Isabel Salapí\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F3@\n0 @I5@ INDI\n1 NAME D. Christóval Punsalán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F3@\n0 @I6@ INDI\n1 NAME D. Christóval Umali\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F3@\n0 @I7@ INDI\n1 NAME Da. Cathalina Ilig\n1 SEX F\n1 NOTE of Maalat (Malate); founded a capellanía 30 Sep 1621 with 200 pesos of land. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F3@\n0 @I8@ INDI\n1 NAME Da. Juana Itta\n1 SEX F\n1 NOTE Probably also Mag-isá's daughter (capellanía register). Founded a capellanía 30 Sep 1621, 600 pesos of land, with her husband. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F76@\n1 FAMC @F3@\n0 @I9@ INDI\n1 NAME D. Nicolás Talabós\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F76@\n0 @I10@ INDI\n1 NAME Solimán (?), father of Rajah Solimán\n1 SEX M\n1 NOTE name conjectural\n1 NOTE House II. Brother of Matandá per text p.42; name given with a question mark.\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F4@\n1 FAMC @F1@\n0 @I11@ INDI\n1 NAME Rajah Solimán (Rahang Mura)\n1 SEX M\n1 NOTE \"Raja Solimano el mozo\"; Rajah Muda = young chief; nephew and heir of Matandá; married a cousin princess from Borneo. pp.42-43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F5@\n1 FAMC @F4@\n0 @I12@ INDI\n1 NAME Princess of Borneo (cousin, unnamed)\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 43\n1 FAMS @F5@\n0 @I13@ INDI\n1 NAME Rajah Vago (Rahang Bago)\n1 SEX M\n1 NOTE \"new prince\"; killed by the Spaniards with his cousin Lumanatlan during the Limahong panic, 1574. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F5@\n0 @I14@ INDI\n1 NAME Da. María Laran\n1 SEX F\n1 NOTE Only surviving child of Solimán. Exemptions restored 21 Apr 1595 for her and 15 male relatives. pp.43, 50\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F6@\n1 FAMC @F5@\n0 @I15@ INDI\n1 NAME Da. Inés Dahitim\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F7@\n1 FAMC @F6@\n0 @I16@ INDI\n1 NAME D. Miguel Banal\n1 SEX M\n1 NOTE chief of Quiapo; presumably son of D. Juan Banal, an older chief of Tondo. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F7@\n0 @I17@ INDI\n1 NAME D. Francisco Banal\n1 SEX M\n1 NOTE presumed son. p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F8@\n1 FAMC @F7@\n0 @I18@ INDI\n1 NAME Da. Clara Morahin\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F8@\n0 @I19@ INDI\n1 NAME Fray Marcelo Banal de San Augustín, O.S.A.\n1 SEX M\n1 NOTE second Filipino Augustinian; \"eminent musician, composer\". p.43\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMC @F8@\n0 @I20@ INDI\n1 NAME Da. María Guinyamat\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F77@\n1 FAMC @F6@\n0 @I21@ INDI\n1 NAME D. Augustín Turingan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 46\n1 FAMS @F77@\n0 @I22@ INDI\n1 NAME (Son)\n1 SEX M\n1 NOTE unnamed brother of Rajah Solimán\n1 NOTE Died before 1588; his three sons were adopted by Solimán. p.44\n1 NOTE deceased sibling of Juan Macapagal\n1 SOUR @S1@\n2 PAGE p. 47, 49\n1 FAMS @F9@\n1 FAMC @F4@\n1 FAMC @F14@\n0 @I23@ INDI\n1 NAME D. Gabriel Tuambasán\n1 SEX M\n1 NOTE Chief of Tondo; in the 1588 Revolt of the Lakans; exiled to New Spain 4 years with his son; exemptions restored 21 Apr 1595, reconfirmed 17 Mar 1605. pp.44, 50\n1 NOTE adopted by Rajah Solimán; son of Solimán's brother\n1 SOUR @S1@\n2 PAGE p. 47, 51\n1 FAMS @F10@\n1 FAMC @F9@\n0 @I24@ INDI\n1 NAME Da. Magdalena Balanúin\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F78@\n1 FAMC @F10@\n0 @I25@ INDI\n1 NAME D. Francisco Ondatan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F78@\n0 @I26@ INDI\n1 NAME D. Francisco Acta\n1 SEX M\n1 NOTE Gabriel's only son; also chief of Tondo; exiled with his father; returned by 1595. pp.44, 50\n1 SOUR @S1@\n2 PAGE p. 47, 51\n1 FAMS @F19@\n1 FAMC @F10@\n0 @I27@ INDI\n1 NAME Da. María Irangin\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMC @F10@\n0 @I28@ INDI\n1 NAME D. Augustín de Legazpi\n1 SEX M\n1 NOTE Executed (hanged and beheaded) for the 1588 conspiracy. p.44\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F11@\n1 FAMC @F9@\n0 @I29@ INDI\n1 NAME Daughter of Pangiran Salalila of Borneo\n1 SEX F\n1 NOTE Brought to Manila as hostage 1578; granddaughter of Sultan Bulkeiah, so actually Augustín's aunt. p.44\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F11@\n0 @I30@ INDI\n1 NAME Da. María Salamatac\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F79@\n1 FAMC @F11@\n0 @I31@ INDI\n1 NAME D. Alonzo Balatac\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMS @F79@\n0 @I32@ INDI\n1 NAME D. Sebastián Incán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMC @F11@\n0 @I33@ INDI\n1 NAME D. Jerónimo Bassi\n1 SEX M\n1 NOTE Executed for the 1588 conspiracy; apparently a bachelor, no issue. p.44\n1 SOUR @S1@\n2 PAGE p. 47\n1 FAMC @F9@\n0 @I34@ INDI\n1 NAME Lakandula (Don Carlos Lacandola)\n1 SEX M\n1 NOTE Last king of Tondo; lord of Tondo, \"Bulacan and the surrounding places\"; received Legazpi 1571; fought Limahong 1574. pp.44-45\n1 SOUR @S1@\n2 PAGE p. 48, 54, 58\n1 FAMS @F12@\n1 FAMC @F1@\n0 @I35@ INDI\n1 NAME D. Dionisio Capulong\n1 SEX M\n1 NOTE Chief of Candava (Candaba); exiled 4 years to New Spain after 1588; served in Cagayán, Calamianes, Tuy, Zambales and Cambodia 1594-1607. pp.45, 50, 52\n1 SOUR @S1@\n2 PAGE p. 48, 54, 58\n1 FAMS @F13@\n1 FAMC @F12@\n0 @I36@ INDI\n1 NAME D. Juan Gonzalo Capulong\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48, 54, 58\n1 FAMS @F14@\n1 FAMC @F13@\n0 @I37@ INDI\n1 NAME D. Juan Macapagal I\n1 SEX M\n1 NOTE Maestre de Campo General 1660; encomendero 1661; died 1683. pp.52-53, 59\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMS @F15@\n1 FAMC @F14@\n0 @I38@ INDI\n1 NAME Da. María Macapagal\n1 SEX F\n1 NOTE eldest; succeeded to the encomienda 23 Jul 1683. p.59\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F15@\n0 @I39@ INDI\n1 NAME D. Francisco Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F15@\n0 @I40@ INDI\n1 NAME D. Pablo Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F15@\n0 @I41@ INDI\n1 NAME D. Salvador Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F15@\n0 @I42@ INDI\n1 NAME D. Potenciano Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F15@\n0 @I43@ INDI\n1 NAME D. Juan de Guevarra\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F14@\n0 @I44@ INDI\n1 NAME D. Miguel Alfonso Lapira\n1 SEX M\n1 NOTE see chart 3\n1 SOUR @S1@\n2 PAGE p. 48, 54\n1 FAMS @F34@\n1 FAMC @F14@\n0 @I45@ INDI\n1 NAME D. Nicolás Lacandola\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F14@\n0 @I46@ INDI\n1 NAME Da. Cathalina Bina\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F14@\n0 @I47@ INDI\n1 NAME D. Bernardo Carlos García\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F80@\n1 FAMC @F9@\n0 @I48@ INDI\n1 NAME Da. María Panginauanan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F80@\n0 @I49@ INDI\n1 NAME Da. Magdalena Payúan\n1 SEX F\n1 NOTE also \"Magdalena Payuan Leoncita\"; ancestor claimed by D. Thomas Vizente Lacandola 1779. pp.65, 68\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F16@\n1 FAMC @F9@\n0 @I50@ INDI\n1 NAME D. Augustín Galang\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F16@\n0 @I51@ INDI\n1 NAME Da. María Payuan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F81@\n1 FAMC @F16@\n0 @I52@ INDI\n1 NAME D. Isidro Yumul\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F81@\n0 @I53@ INDI\n1 NAME Da. María Mandig\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F82@\n1 FAMC @F16@\n0 @I54@ INDI\n1 NAME D. Bartholomé Lintag\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F82@\n0 @I55@ INDI\n1 NAME Da. Luisa (Leoncia) Mandig\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F83@\n1 FAMC @F9@\n0 @I56@ INDI\n1 NAME D. Juan de León\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F83@\n0 @I57@ INDI\n1 NAME Da. Margarita Tahilán (Taylán)\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49, 58\n1 FAMS @F17@\n1 FAMC @F9@\n1 FAMC @F46@\n0 @I58@ INDI\n1 NAME Capitán D. Juan Paguio\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49, 58\n1 FAMS @F17@\n0 @I59@ INDI\n1 NAME D. Augustín Capulong\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F17@\n0 @I60@ INDI\n1 NAME D. Pedro Madlangbayan\n1 SEX M\n1 NOTE see chart 4\n1 NOTE born Arayat, Pampanga; great-nephew of Juan Macapagal; his descendants moved to Tayabas. p.67\n1 SOUR @S1@\n2 PAGE p. 49, 58\n1 FAMS @F47@\n1 FAMS @F89@\n1 FAMS @F90@\n1 FAMC @F17@\n0 @I61@ INDI\n1 NAME Da. Eusebia Cathalina Bolindanan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F17@\n0 @I62@ INDI\n1 NAME D. Magat Salamat\n1 SEX M\n1 NOTE Chief of Tondo; \"son of the old lord of this land\"; hanged and beheaded for 1588 conspiracy. pp.45, 50\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F12@\n0 @I63@ INDI\n1 NAME D. Phelipe Salonga\n1 SEX M\n1 NOTE Chief of Polo, Bulacan; exiled 6 years. pp.45, 50\n1 SOUR @S1@\n2 PAGE p. 48\n1 FAMC @F12@\n0 @I64@ INDI\n1 NAME Da. María Poloin\n1 SEX F\n1 NOTE only daughter; privileges restored 23 Jan 1626. pp.45, 50\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F18@\n1 FAMC @F12@\n0 @I65@ INDI\n1 NAME D. Alonzo Talabós\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMS @F18@\n0 @I66@ INDI\n1 NAME Da. Juana Malay\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F18@\n0 @I67@ INDI\n1 NAME Da. Mónica Bina\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F18@\n0 @I68@ INDI\n1 NAME Hno. Martín Lacandola, O.S.A.\n1 SEX M\n1 NOTE Augustinian lay brother 1590. p.45\n1 SOUR @S1@\n2 PAGE p. 49\n1 FAMC @F12@\n0 @I69@ INDI\n1 NAME Da. Lucía Gutiérrez\n1 SEX F\n1 NOTE husband not named\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F20@\n1 FAMC @F19@\n0 @I70@ INDI\n1 NAME D. Diego de Legazpi\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F21@\n1 FAMC @F20@\n0 @I71@ INDI\n1 NAME D. Lucas Balthazar\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F22@\n1 FAMC @F21@\n0 @I72@ INDI\n1 NAME D. Sebastián Balthazar\n1 SEX M\n1 NOTE Total exemption restored 9 Nov 1729 to \"Don Sebastián Baltazar\", descendant of Tuambasán. p.61\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F23@\n1 FAMC @F22@\n0 @I73@ INDI\n1 NAME D. Miguel Pérez\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F23@\n0 @I74@ INDI\n1 NAME D. Francisco Pérez\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F23@\n0 @I75@ INDI\n1 NAME D. Nicolás Pérez\n1 SEX M\n1 NOTE A \"Don Nicolás Perez\", descendant of Tuambasán, had total exemption restored 9 Nov 1729 (p.61); the chart has two men of this name.\n1 NOTE son of Mathías; the FamilySearch line makes him Melchor Pérez's father\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F84@\n1 FAMC @F22@\n1 FAMC @F24@\n0 @I76@ INDI\n1 NAME Da. María Espíritu\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F84@\n0 @I77@ INDI\n1 NAME D. Mathías Pérez\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F24@\n1 FAMC @F22@\n0 @I78@ INDI\n1 NAME Da. Lucía Paiguitan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F24@\n0 @I79@ INDI\n1 NAME D. Augustín Pérez\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F24@\n0 @I80@ INDI\n1 NAME D. Gaspar Pérez\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F24@\n0 @I81@ INDI\n1 NAME D. Melchor de los Reyes\n1 SEX M\n1 NOTE Exemption restored 3 Sep 1730 with Da. Michaela del Rosario. p.61\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F25@\n1 FAMC @F22@\n0 @I82@ INDI\n1 NAME Da. Michaela del Rosario\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F25@\n0 @I83@ INDI\n1 NAME D. Gabriel de los Reyes\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F25@\n0 @I84@ INDI\n1 NAME D. Vizente Villa Raza\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F25@\n0 @I85@ INDI\n1 NAME D. Juan Mangali\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F25@\n0 @I86@ INDI\n1 NAME D. Miguel de los Reyes\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F25@\n0 @I87@ INDI\n1 NAME Da. Nicolasa Calong\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F26@\n1 FAMC @F21@\n0 @I88@ INDI\n1 NAME D. Pasqual Baylón Balagtás\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F26@\n0 @I89@ INDI\n1 NAME D. Simón Mamangan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F27@\n1 FAMC @F26@\n0 @I90@ INDI\n1 NAME Da. María Castillo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F27@\n0 @I91@ INDI\n1 NAME Da. Magdalena\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F27@\n0 @I92@ INDI\n1 NAME Da. Pasquala\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F27@\n0 @I93@ INDI\n1 NAME D. Juan de Castro\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F28@\n1 FAMC @F27@\n0 @I94@ INDI\n1 NAME Da. Manuela Castillo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F28@\n0 @I95@ INDI\n1 NAME D. Casimiro\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F28@\n0 @I96@ INDI\n1 NAME D. Martín\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F28@\n0 @I97@ INDI\n1 NAME Da. Brígida\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F28@\n0 @I98@ INDI\n1 NAME D. Vizente\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F28@\n0 @I99@ INDI\n1 NAME D. Eugenio\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F85@\n1 FAMC @F28@\n0 @I100@ INDI\n1 NAME Da. Augustina Manlapas\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F85@\n0 @I101@ INDI\n1 NAME D. Faustino Arceo\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F86@\n1 FAMC @F28@\n0 @I102@ INDI\n1 NAME Da. Jerónima Castillo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F86@\n0 @I103@ INDI\n1 NAME D. Valentín Balagtás\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F26@\n0 @I104@ INDI\n1 NAME Da. Juana Castillo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F26@\n0 @I105@ INDI\n1 NAME Da. Mónica Calong\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F26@\n0 @I106@ INDI\n1 NAME D. Marzelo de la Cruz\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F29@\n1 FAMC @F21@\n0 @I107@ INDI\n1 NAME D. Bernardo de la Cruz Manalastás\n1 SEX M\n1 NOTE Probably the \"Don Bernardo de la Cruz\" whose exemption was restored 9 Nov 1729. p.61\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F30@\n1 FAMC @F29@\n0 @I108@ INDI\n1 NAME Da. María Josepha\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F30@\n0 @I109@ INDI\n1 NAME D. Pedro Manalastás\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F31@\n1 FAMC @F30@\n0 @I110@ INDI\n1 NAME D. Matheo Solimán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F31@\n0 @I111@ INDI\n1 NAME D. Pedro Gabriel Solimán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F31@\n0 @I112@ INDI\n1 NAME Da. María de la Cruz\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F30@\n0 @I113@ INDI\n1 NAME D. Augustín de la Cruz Solimán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F32@\n1 FAMC @F29@\n0 @I114@ INDI\n1 NAME Da. Theresa Caguit\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F32@\n0 @I115@ INDI\n1 NAME D. Miguel Solimán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F87@\n1 FAMC @F32@\n0 @I116@ INDI\n1 NAME Da. Lorenza Vagas\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F87@\n0 @I117@ INDI\n1 NAME D. Diego Solimán\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F33@\n1 FAMC @F29@\n0 @I118@ INDI\n1 NAME Da. Augustina Carmona\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMS @F33@\n0 @I119@ INDI\n1 NAME D. Juan Diego Carmona\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 51\n1 FAMC @F33@\n0 @I120@ INDI\n1 NAME Da. María Bina\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F34@\n0 @I121@ INDI\n1 NAME Don Eugenio Lapira Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F35@\n1 FAMC @F34@\n0 @I122@ INDI\n1 NAME Da. Cathalina Sinacumanglugod\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F35@\n0 @I123@ INDI\n1 NAME D. Juan Macapagal II\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F36@\n1 FAMC @F35@\n0 @I124@ INDI\n1 NAME Da. María Pasquala\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F36@\n0 @I125@ INDI\n1 NAME D. Joseph de San Buenaventura Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1729\n1 NOTE married 1750, consanguineous\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F37@\n1 FAMC @F36@\n0 @I126@ INDI\n1 NAME Da. Clara Concepción Macapagal\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F37@\n0 @I127@ INDI\n1 NAME Da. Euztazia\n1 SEX F\n1 BIRT\n2 DATE 1753\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F37@\n0 @I128@ INDI\n1 NAME D. Juan III\n1 SEX M\n1 BIRT\n2 DATE 1755\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F37@\n0 @I129@ INDI\n1 NAME Da. María\n1 SEX F\n1 BIRT\n2 DATE 1757\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F37@\n0 @I130@ INDI\n1 NAME D. Eugenio Lapira Macapagal\n1 SEX M\n1 NOTE consanguineous marriage\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F38@\n1 FAMC @F36@\n0 @I131@ INDI\n1 NAME Da. Escolástica Benita Macapagal\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F38@\n0 @I132@ INDI\n1 NAME Da. Rossa Mónica\n1 SEX F\n1 BIRT\n2 DATE 1736\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F38@\n0 @I133@ INDI\n1 NAME D. Gaspar\n1 SEX M\n1 BIRT\n2 DATE 1738\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F38@\n0 @I134@ INDI\n1 NAME D. Salvador\n1 SEX M\n1 BIRT\n2 DATE 1739\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F38@\n0 @I135@ INDI\n1 NAME D. Manuel Macapagal\n1 SEX M\n1 NOTE consanguineous marriage\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F39@\n1 FAMS @F88@\n1 FAMC @F35@\n0 @I136@ INDI\n1 NAME Da. María Candelaria Salonga\n1 SEX F\n1 NOTE 1st wife\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F39@\n0 @I137@ INDI\n1 NAME Da. María Francia\n1 SEX F\n1 NOTE 2nd wife; no issue\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F88@\n0 @I138@ INDI\n1 NAME D. Juan Lapira Macapagal y Salonga\n1 SEX M\n1 BIRT\n2 DATE 1710\n1 NOTE married 1734; the chart lists \"2. Da. Lucía Palanauan Sadye y Danan, b.1716\" as his wife (numbered as a second wife; a first is not named)\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F40@\n1 FAMC @F39@\n0 @I139@ INDI\n1 NAME Da. Lucía Palanauan Sadye y Danan\n1 SEX F\n1 BIRT\n2 DATE 1716\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F40@\n0 @I140@ INDI\n1 NAME Da. María Vizenta\n1 SEX F\n1 BIRT\n2 DATE 1738\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I141@ INDI\n1 NAME Da. María Lorenza\n1 SEX F\n1 BIRT\n2 DATE 1740\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I142@ INDI\n1 NAME D. Raphael\n1 SEX M\n1 BIRT\n2 DATE 1742\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I143@ INDI\n1 NAME Da. Angela Sussana\n1 SEX F\n1 BIRT\n2 DATE 1744\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I144@ INDI\n1 NAME D. Enrique\n1 SEX M\n1 BIRT\n2 DATE 1747\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I145@ INDI\n1 NAME D. Joseph Gregorio\n1 SEX M\n1 BIRT\n2 DATE 1749\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I146@ INDI\n1 NAME D. Juan\n1 SEX M\n1 BIRT\n2 DATE 1752\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I147@ INDI\n1 NAME Da. Ritta\n1 SEX F\n1 BIRT\n2 DATE 1754\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I148@ INDI\n1 NAME D. Manuel\n1 SEX M\n1 BIRT\n2 DATE 1757\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F40@\n0 @I149@ INDI\n1 NAME D. Joseph Lapira Macapagal\n1 SEX M\n1 NOTE married 1743\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMS @F41@\n1 FAMC @F39@\n0 @I150@ INDI\n1 NAME Da. Cathalina Candelaria Bagamunda\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMS @F41@\n0 @I151@ INDI\n1 NAME D. Manuel\n1 SEX M\n1 BIRT\n2 DATE 1744\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F41@\n0 @I152@ INDI\n1 NAME D. Miguel\n1 SEX M\n1 BIRT\n2 DATE 1745\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F41@\n0 @I153@ INDI\n1 NAME D. Juan\n1 SEX M\n1 BIRT\n2 DATE 1749\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F41@\n0 @I154@ INDI\n1 NAME D. Nicolás\n1 SEX M\n1 BIRT\n2 DATE 1754\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F41@\n0 @I155@ INDI\n1 NAME D. Vizente\n1 SEX M\n1 BIRT\n2 DATE 1757\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F41@\n0 @I156@ INDI\n1 NAME D. Miguel Lapira Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F42@\n1 FAMS @F45@\n1 FAMC @F35@\n0 @I157@ INDI\n1 NAME Da. Martina Quinang de la Concepción\n1 SEX F\n1 NOTE 1st wife\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F42@\n0 @I158@ INDI\n1 NAME Da. Cathalina Paguio\n1 SEX F\n1 NOTE 2nd wife, married 1752, consanguineous\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F45@\n0 @I159@ INDI\n1 NAME Don Juan Lapira Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1718\n1 NOTE married 1741, consanguineous\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F43@\n1 FAMC @F42@\n0 @I160@ INDI\n1 NAME Da. Alverta Ágatta Bina Macapagal\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMS @F43@\n0 @I161@ INDI\n1 NAME Da. Petrona\n1 SEX F\n1 BIRT\n2 DATE 1741\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I162@ INDI\n1 NAME Da. Lorenza\n1 SEX F\n1 BIRT\n2 DATE 1743\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I163@ INDI\n1 NAME D. Christoval\n1 SEX M\n1 BIRT\n2 DATE 1745\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I164@ INDI\n1 NAME D. Nicolás\n1 SEX M\n1 BIRT\n2 DATE 1751\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I165@ INDI\n1 NAME Da. Vicenta\n1 SEX F\n1 BIRT\n2 DATE 1754\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I166@ INDI\n1 NAME Da. Ritta\n1 SEX F\n1 BIRT\n2 DATE 1755\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I167@ INDI\n1 NAME D. Manuel Vizente\n1 SEX M\n1 BIRT\n2 DATE 1757\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F43@\n0 @I168@ INDI\n1 NAME D. Manuel Lapira Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1722\n1 NOTE married 1750, consanguineous\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMS @F44@\n1 FAMC @F42@\n0 @I169@ INDI\n1 NAME Da. Nicolasa Paguio\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMS @F44@\n0 @I170@ INDI\n1 NAME D. Bernardo\n1 SEX M\n1 BIRT\n2 DATE 1752\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F44@\n0 @I171@ INDI\n1 NAME D. Miguel\n1 SEX M\n1 BIRT\n2 DATE 1734\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F42@\n0 @I172@ INDI\n1 NAME D. Joseph\n1 SEX M\n1 BIRT\n2 DATE 1736\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F42@\n0 @I173@ INDI\n1 NAME D. Juan\n1 SEX M\n1 BIRT\n2 DATE 1741\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F42@\n0 @I174@ INDI\n1 NAME Da. Florentina\n1 SEX F\n1 BIRT\n2 DATE 1743\n1 NOTE twin\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F42@\n0 @I175@ INDI\n1 NAME Da. Bernarda\n1 SEX F\n1 BIRT\n2 DATE 1743\n1 NOTE twin\n1 SOUR @S1@\n2 PAGE p. 55\n1 FAMC @F42@\n0 @I176@ INDI\n1 NAME D. Vizente Lapira Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1752\n1 SOUR @S1@\n2 PAGE p. 54\n1 FAMC @F45@\n0 @I177@ INDI\n1 NAME (Son)\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F46@\n1 FAMC @F14@\n0 @I178@ INDI\n1 NAME Doña Francisca Benavides\n1 SEX F\n1 NOTE 1st wife\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F89@\n0 @I179@ INDI\n1 NAME Doña Isabel de San Josef\n1 SEX F\n1 NOTE 2nd wife, \"Principala de Mauban\", married 1732; the chart does not say which wife is the mother\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F90@\n0 @I180@ INDI\n1 NAME Da. Úrsula Tahilán\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F48@\n1 FAMC @F47@\n0 @I181@ INDI\n1 NAME D. Pedro Laureano\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F48@\n0 @I182@ INDI\n1 NAME Da. Tomasina Tahilán\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F49@\n1 FAMC @F48@\n0 @I183@ INDI\n1 NAME D. Santiago Valentín\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F49@\n0 @I184@ INDI\n1 NAME Da. María Ana de San Miguel\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F49@\n0 @I185@ INDI\n1 NAME D. Josef Laureano Valentín\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F49@\n0 @I186@ INDI\n1 NAME Da. Juana Pinta\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F49@\n0 @I187@ INDI\n1 NAME Da. Felipa Margarita\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F49@\n0 @I188@ INDI\n1 NAME D. Josef Madlangbayan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F50@\n1 FAMC @F47@\n0 @I189@ INDI\n1 NAME Da. Clara Buenaventura\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F50@\n0 @I190@ INDI\n1 NAME D. Jerónimo Santiago García\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F50@\n0 @I191@ INDI\n1 NAME D. Julián de los Santos\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F50@\n0 @I192@ INDI\n1 NAME D. Simón de los Reyes\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F50@\n0 @I193@ INDI\n1 NAME D. Pedro Capulong\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F50@\n0 @I194@ INDI\n1 NAME Da. María Presentación\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F50@\n0 @I195@ INDI\n1 NAME Da. Jerónima Margarita\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F51@\n1 FAMC @F47@\n0 @I196@ INDI\n1 NAME D. Ignacio de los Reyes\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F51@\n0 @I197@ INDI\n1 NAME D. Miguel Capulong\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F51@\n0 @I198@ INDI\n1 NAME Da. Ignacia Samorana\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F51@\n0 @I199@ INDI\n1 NAME D. Ventura Masana\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F51@\n0 @I200@ INDI\n1 NAME D. Claudio Carlos\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F51@\n0 @I201@ INDI\n1 NAME D. Josef Apolonio\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F51@\n0 @I202@ INDI\n1 NAME Da. Margarita Tahilán II\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F52@\n1 FAMC @F47@\n0 @I203@ INDI\n1 NAME D. Luís de la Vega\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMS @F52@\n0 @I204@ INDI\n1 NAME D. Hilario Mateo\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F52@\n0 @I205@ INDI\n1 NAME D. Mariano García\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F52@\n0 @I206@ INDI\n1 NAME D. Tomás de los Santos\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F52@\n0 @I207@ INDI\n1 NAME D. Josef de Sta. María\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F52@\n0 @I208@ INDI\n1 NAME Da. Bárbara Pasquala\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 58\n1 FAMC @F52@\n0 @I209@ INDI\n1 NAME D. Joseph Capulong\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F53@\n0 @I210@ INDI\n1 NAME Da. María Alangcasalat\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F53@\n0 @I211@ INDI\n1 NAME Da. Narcisa Capulong\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F54@\n1 FAMC @F53@\n0 @I212@ INDI\n1 NAME D. Domingo Paguio\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F54@\n0 @I213@ INDI\n1 NAME Da. María Gracia Paguio\n1 SEX F\n1 NOTE married 1796\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F55@\n1 FAMC @F54@\n0 @I214@ INDI\n1 NAME D. Pedro Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1772\n1 NOTE married 1st 1796 María Gracia Paguio; 2nd 1819 Gertrudes García Salas\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F55@\n1 FAMS @F62@\n1 FAMC @F61@\n0 @I215@ INDI\n1 NAME D. Quirino Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1797\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F56@\n1 FAMS @F57@\n1 FAMS @F58@\n1 FAMC @F55@\n0 @I216@ INDI\n1 NAME Da. Francisca Punsalang y Díaz\n1 SEX F\n1 NOTE 1st wife, married 1821 as printed\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F56@\n0 @I217@ INDI\n1 NAME Da. María Guadalupe Pamandán y Buán\n1 SEX F\n1 NOTE 2nd wife, married \"1820\" as printed\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F57@\n0 @I218@ INDI\n1 NAME Da. Valentina Galang y García\n1 SEX F\n1 NOTE 3rd wife, married 1837\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F58@\n0 @I219@ INDI\n1 NAME D. Buenaventura\n1 SEX M\n1 BIRT\n2 DATE 1814\n1 NOTE birth year as printed, before the printed 1821 marriage\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F56@\n0 @I220@ INDI\n1 NAME Da. Potenciana\n1 SEX F\n1 BIRT\n2 DATE 1821\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I221@ INDI\n1 NAME Da. Lorenza\n1 SEX F\n1 BIRT\n2 DATE 1822\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I222@ INDI\n1 NAME D. Ciriaco\n1 SEX M\n1 BIRT\n2 DATE 1824\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I223@ INDI\n1 NAME D. Pío\n1 SEX M\n1 BIRT\n2 DATE 1829\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I224@ INDI\n1 NAME D. Máximo Fernando\n1 SEX M\n1 BIRT\n2 DATE 1832\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I225@ INDI\n1 NAME Da. Felipa Prudencia\n1 SEX F\n1 BIRT\n2 DATE 1834\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F57@\n0 @I226@ INDI\n1 NAME D. Alejandro\n1 SEX M\n1 BIRT\n2 DATE 1837\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F91@\n1 FAMC @F57@\n0 @I227@ INDI\n1 NAME Da. Reducinda Macapagal Capulong\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F91@\n0 @I228@ INDI\n1 NAME Da. Evarista\n1 SEX F\n1 BIRT\n2 DATE 1839\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F58@\n0 @I229@ INDI\n1 NAME D. Rosauro\n1 SEX M\n1 BIRT\n2 DATE 1841\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F58@\n0 @I230@ INDI\n1 NAME Da. María Josepha\n1 SEX F\n1 NOTE married 1826\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F59@\n1 FAMC @F55@\n0 @I231@ INDI\n1 NAME D. Francisco Mallari\n1 SEX M\n1 BIRT\n2 DATE 1804\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F59@\n0 @I232@ INDI\n1 NAME D. Pedro Mallari Macapagal\n1 SEX M\n1 BIRT\n2 DATE 1827\n1 NOTE propositus; with his cousin D. Mariano Punzalán Mallari y Vergara Lacandola of Apalit, petitioned 1882-83; approved 22 Sep 1883. p.68\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F59@\n0 @I233@ INDI\n1 NAME D. José\n1 SEX M\n1 BIRT\n2 DATE 1832\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F59@\n0 @I234@ INDI\n1 NAME Da. Filomena\n1 SEX F\n1 BIRT\n2 DATE 1833\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F92@\n1 FAMC @F59@\n0 @I235@ INDI\n1 NAME D. Vicente Cuyugan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F92@\n0 @I236@ INDI\n1 NAME D. Gregorio\n1 SEX M\n1 BIRT\n2 DATE 1835\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F59@\n0 @I237@ INDI\n1 NAME D. Nicomedes\n1 SEX M\n1 BIRT\n2 DATE 1840\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F59@\n0 @I238@ INDI\n1 NAME D. Soterio Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F60@\n0 @I239@ INDI\n1 NAME Da. Inés Payoan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F60@\n0 @I240@ INDI\n1 NAME D. Joseph Macapagal\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F61@\n1 FAMC @F60@\n0 @I241@ INDI\n1 NAME Da. Josepha Muldung\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F61@\n0 @I242@ INDI\n1 NAME Da. Gertrudes García Salas\n1 SEX F\n1 NOTE 2nd wife, married 1819\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F62@\n0 @I243@ INDI\n1 NAME Da. Milencia Macapagal\n1 SEX F\n1 BIRT\n2 DATE 1820\n1 NOTE married 1836\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F63@\n1 FAMC @F62@\n0 @I244@ INDI\n1 NAME D. Pedro Gómez y Cudia\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F63@\n0 @I245@ INDI\n1 NAME Da. Rosa Gómez\n1 SEX F\n1 BIRT\n2 DATE 1837\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F93@\n1 FAMC @F63@\n0 @I246@ INDI\n1 NAME D. Mariano Mandap\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMS @F93@\n0 @I247@ INDI\n1 NAME Da. Estefanía Gómez\n1 SEX F\n1 BIRT\n2 DATE 1840\n1 SOUR @S1@\n2 PAGE p. 60\n1 FAMC @F63@\n0 @I248@ INDI\n1 NAME Don Valeriano de Vergara\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F64@\n0 @I249@ INDI\n1 NAME Doña María Rita Arceo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F64@\n0 @I250@ INDI\n1 NAME Don Vizente Tranquilino de Vergara\n1 SEX M\n1 BIRT\n2 DATE 1779\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F65@\n1 FAMC @F64@\n0 @I251@ INDI\n1 NAME Doña Silveria de la Cruz\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F65@\n0 @I252@ INDI\n1 NAME Da. Josepha Vergara\n1 SEX F\n1 BIRT\n2 DATE 1816\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F66@\n1 FAMC @F65@\n0 @I253@ INDI\n1 NAME D. Hipólito Guevarra\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F66@\n0 @I254@ INDI\n1 NAME D. Mariano Guevarra\n1 SEX M\n1 BIRT\n2 DATE 1843\n1 NOTE married 1873\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F67@\n1 FAMC @F66@\n0 @I255@ INDI\n1 NAME Da. Lucía Pamandán y Pamintúan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F67@\n0 @I256@ INDI\n1 NAME D. Mathías\n1 SEX M\n1 BIRT\n2 DATE 1868\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F67@\n0 @I257@ INDI\n1 NAME Da. Ambrosia Guevarra\n1 SEX F\n1 BIRT\n2 DATE 1845\n1 NOTE married 1874\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F94@\n1 FAMC @F66@\n0 @I258@ INDI\n1 NAME D. Alberto Timoteo y Lubo\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F94@\n0 @I259@ INDI\n1 NAME D. Crisóstomo Guevarra\n1 SEX M\n1 BIRT\n2 DATE 1848\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F66@\n0 @I260@ INDI\n1 NAME D. Rosalio Vergara\n1 SEX M\n1 BIRT\n2 DATE 1817\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F68@\n1 FAMC @F65@\n0 @I261@ INDI\n1 NAME Da. Dionisia Guillermo\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F68@\n0 @I262@ INDI\n1 NAME D. Espiridión Vergara\n1 SEX M\n1 BIRT\n2 DATE 1838\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F69@\n1 FAMC @F68@\n0 @I263@ INDI\n1 NAME Da. Fausta Pamandanan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F69@\n0 @I264@ INDI\n1 NAME D. Tito\n1 SEX M\n1 BIRT\n2 DATE 1859\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F69@\n0 @I265@ INDI\n1 NAME D. Felipe\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F69@\n0 @I266@ INDI\n1 NAME D. Macario\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F69@\n0 @I267@ INDI\n1 NAME D. Leoncio Vergara\n1 SEX M\n1 NOTE married 1871\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F95@\n1 FAMC @F68@\n0 @I268@ INDI\n1 NAME Da. Vicenta Carlos y Cabrera\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F95@\n0 @I269@ INDI\n1 NAME D. Marcos Vergara\n1 SEX M\n1 BIRT\n2 DATE 1822\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F70@\n1 FAMC @F65@\n0 @I270@ INDI\n1 NAME Da. Petrona Pangan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F70@\n0 @I271@ INDI\n1 NAME D. Andrés Vergara\n1 SEX M\n1 NOTE married 1874\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F96@\n1 FAMC @F70@\n0 @I272@ INDI\n1 NAME Da. Gregoria Salvador y Yambao\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F96@\n0 @I273@ INDI\n1 NAME D. Elías Vergara\n1 SEX M\n1 BIRT\n2 DATE 1855\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F70@\n0 @I274@ INDI\n1 NAME D. Eulalio Vergara\n1 SEX M\n1 NOTE married 1871\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F97@\n1 FAMC @F70@\n0 @I275@ INDI\n1 NAME Da. Nicolasa Angeles\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F97@\n0 @I276@ INDI\n1 NAME D. Francisco Vergara\n1 SEX M\n1 BIRT\n2 DATE 1824\n1 NOTE married 1842\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F71@\n1 FAMC @F65@\n0 @I277@ INDI\n1 NAME Da. Fermina Pangan\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F71@\n0 @I278@ INDI\n1 NAME D. Alejandro Vergara\n1 SEX M\n1 NOTE married 1871\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F98@\n1 FAMC @F71@\n0 @I279@ INDI\n1 NAME Da. Juana Macalino y Binuya\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMS @F98@\n0 @I280@ INDI\n1 NAME Da. Juana Vergara\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 62\n1 FAMC @F71@\n0 @I281@ INDI\n1 NAME D. Vicente Vergara\n1 SEX M\n1 BIRT\n2 DATE 1826\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F99@\n1 FAMS @F100@\n1 FAMC @F65@\n0 @I282@ INDI\n1 NAME Da. Paulina Pangan\n1 SEX F\n1 NOTE 1st wife\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F99@\n0 @I283@ INDI\n1 NAME Da. Aleja Mandap y Punsalang\n1 SEX F\n1 NOTE 2nd wife\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F100@\n0 @I284@ INDI\n1 NAME Da. María Concepción Vergara\n1 SEX F\n1 BIRT\n2 DATE 1828\n1 NOTE married 1847\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F72@\n1 FAMC @F65@\n0 @I285@ INDI\n1 NAME D. Tomás Punsalang\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F72@\n0 @I286@ INDI\n1 NAME D. Mariano Punsalang\n1 SEX M\n1 BIRT\n2 DATE 1848\n1 NOTE propositus; = D. Mariano Punzalán Mallari y Vergara Lacandola of Apalit, petition approved 22 Sep 1883 (p.68)\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I287@ INDI\n1 NAME D. Guillermo Punsalang\n1 SEX M\n1 BIRT\n2 DATE 1851\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I288@ INDI\n1 NAME D. Casimiro Punsalang\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I289@ INDI\n1 NAME Da. Faustina Punsalang\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I290@ INDI\n1 NAME D. Nicolás Punsalang\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I291@ INDI\n1 NAME Da. María Punsalang\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I292@ INDI\n1 NAME Da. Antonia Punsalang\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I293@ INDI\n1 NAME Da. Eusebia Punsalang\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F72@\n0 @I294@ INDI\n1 NAME D. Hilarión Vergara\n1 SEX M\n1 BIRT\n2 DATE 1831\n1 NOTE married 1849\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F73@\n1 FAMC @F65@\n0 @I295@ INDI\n1 NAME Da. Dolores Macapagal\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F73@\n0 @I296@ INDI\n1 NAME D. Pantaleón Vergara\n1 SEX M\n1 NOTE married 1872\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F101@\n1 FAMC @F73@\n0 @I297@ INDI\n1 NAME Da. María Guevarra y Camaya\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F101@\n0 @I298@ INDI\n1 NAME D. Justo Vergara\n1 SEX M\n1 BIRT\n2 DATE 1850\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F73@\n0 @I299@ INDI\n1 NAME D. Alipio Vergara\n1 SEX M\n1 BIRT\n2 DATE 1856\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F73@\n0 @I300@ INDI\n1 NAME D. Marcelo Vergara\n1 SEX M\n1 BIRT\n2 DATE 1833\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F74@\n1 FAMC @F65@\n0 @I301@ INDI\n1 NAME Da. Anastacia Cortés\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F74@\n0 @I302@ INDI\n1 NAME Da. Hermenegilda Vergara\n1 SEX F\n1 BIRT\n2 DATE 1851\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F74@\n0 @I303@ INDI\n1 NAME D. Damián Vergara\n1 SEX M\n1 BIRT\n2 DATE 1861\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMC @F74@\n0 @I304@ INDI\n1 NAME Da. Lucía Vergara\n1 SEX F\n1 BIRT\n2 DATE 1835\n1 NOTE married 1852\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F75@\n1 FAMC @F65@\n0 @I305@ INDI\n1 NAME D. Cipriano Mercado y Búan\n1 SEX M\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F75@\n0 @I306@ INDI\n1 NAME D. Juan Mercado\n1 SEX M\n1 NOTE married 1874\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F102@\n1 FAMC @F75@\n0 @I307@ INDI\n1 NAME Da. Potenciana Dionisio y Gozum\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F102@\n0 @I308@ INDI\n1 NAME D. Anastacio Mercado\n1 SEX M\n1 NOTE married 1877\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F103@\n1 FAMC @F75@\n0 @I309@ INDI\n1 NAME Da. Laureana Manalili y Cortés\n1 SEX F\n1 SOUR @S1@\n2 PAGE p. 63\n1 FAMS @F103@\n0 @F1@ FAM\n1 HUSB @I1@\n1 CHIL @I2@\n1 CHIL @I10@\n1 CHIL @I34@\n1 SOUR @S1@\n0 @F2@ FAM\n1 HUSB @I2@\n1 CHIL @I3@\n1 SOUR @S1@\n0 @F3@ FAM\n1 HUSB @I3@\n1 CHIL @I4@\n1 CHIL @I5@\n1 CHIL @I6@\n1 CHIL @I7@\n1 CHIL @I8@\n1 SOUR @S1@\n0 @F4@ FAM\n1 HUSB @I10@\n1 CHIL @I11@\n1 CHIL @I22@\n1 SOUR @S1@\n0 @F5@ FAM\n1 HUSB @I11@\n1 WIFE @I12@\n1 CHIL @I13@\n1 CHIL @I14@\n1 SOUR @S1@\n0 @F6@ FAM\n1 WIFE @I14@\n1 CHIL @I15@\n1 CHIL @I20@\n1 SOUR @S1@\n0 @F7@ FAM\n1 HUSB @I16@\n1 WIFE @I15@\n1 CHIL @I17@\n1 SOUR @S1@\n0 @F8@ FAM\n1 HUSB @I17@\n1 WIFE @I18@\n1 CHIL @I19@\n1 SOUR @S1@\n0 @F9@ FAM\n1 HUSB @I22@\n1 CHIL @I23@\n1 CHIL @I28@\n1 CHIL @I33@\n1 CHIL @I47@\n1 CHIL @I49@\n1 CHIL @I55@\n1 CHIL @I57@\n1 SOUR @S1@\n0 @F10@ FAM\n1 HUSB @I23@\n1 CHIL @I24@\n1 CHIL @I26@\n1 CHIL @I27@\n1 SOUR @S1@\n0 @F11@ FAM\n1 HUSB @I28@\n1 WIFE @I29@\n1 CHIL @I30@\n1 CHIL @I32@\n1 SOUR @S1@\n0 @F12@ FAM\n1 HUSB @I34@\n1 CHIL @I35@\n1 CHIL @I62@\n1 CHIL @I63@\n1 CHIL @I64@\n1 CHIL @I68@\n1 SOUR @S1@\n0 @F13@ FAM\n1 HUSB @I35@\n1 CHIL @I36@\n1 SOUR @S1@\n0 @F14@ FAM\n1 HUSB @I36@\n1 CHIL @I37@\n1 CHIL @I43@\n1 CHIL @I44@\n1 CHIL @I45@\n1 CHIL @I46@\n1 CHIL @I22@\n1 CHIL @I177@\n1 SOUR @S1@\n0 @F15@ FAM\n1 HUSB @I37@\n1 CHIL @I38@\n1 CHIL @I39@\n1 CHIL @I40@\n1 CHIL @I41@\n1 CHIL @I42@\n1 SOUR @S1@\n0 @F16@ FAM\n1 HUSB @I50@\n1 WIFE @I49@\n1 CHIL @I51@\n1 CHIL @I53@\n1 SOUR @S1@\n0 @F17@ FAM\n1 HUSB @I58@\n1 WIFE @I57@\n1 CHIL @I59@\n1 CHIL @I60@\n1 CHIL @I61@\n1 SOUR @S1@\n0 @F18@ FAM\n1 HUSB @I65@\n1 WIFE @I64@\n1 CHIL @I66@\n1 CHIL @I67@\n1 SOUR @S1@\n0 @F19@ FAM\n1 HUSB @I26@\n1 CHIL @I69@\n1 SOUR @S1@\n0 @F20@ FAM\n1 WIFE @I69@\n1 CHIL @I70@\n1 SOUR @S1@\n0 @F21@ FAM\n1 HUSB @I70@\n1 CHIL @I71@\n1 CHIL @I87@\n1 CHIL @I106@\n1 SOUR @S1@\n0 @F22@ FAM\n1 HUSB @I71@\n1 CHIL @I72@\n1 CHIL @I75@\n1 CHIL @I77@\n1 CHIL @I81@\n1 SOUR @S1@\n0 @F23@ FAM\n1 HUSB @I72@\n1 CHIL @I73@\n1 CHIL @I74@\n1 SOUR @S1@\n0 @F24@ FAM\n1 HUSB @I77@\n1 WIFE @I78@\n1 CHIL @I79@\n1 CHIL @I80@\n1 CHIL @I75@\n1 SOUR @S1@\n0 @F25@ FAM\n1 HUSB @I81@\n1 WIFE @I82@\n1 CHIL @I83@\n1 CHIL @I84@\n1 CHIL @I85@\n1 CHIL @I86@\n1 SOUR @S1@\n0 @F26@ FAM\n1 HUSB @I88@\n1 WIFE @I87@\n1 CHIL @I89@\n1 CHIL @I103@\n1 CHIL @I104@\n1 CHIL @I105@\n1 SOUR @S1@\n0 @F27@ FAM\n1 HUSB @I89@\n1 WIFE @I90@\n1 CHIL @I91@\n1 CHIL @I92@\n1 CHIL @I93@\n1 SOUR @S1@\n0 @F28@ FAM\n1 HUSB @I93@\n1 WIFE @I94@\n1 CHIL @I95@\n1 CHIL @I96@\n1 CHIL @I97@\n1 CHIL @I98@\n1 CHIL @I99@\n1 CHIL @I101@\n1 SOUR @S1@\n0 @F29@ FAM\n1 HUSB @I106@\n1 CHIL @I107@\n1 CHIL @I113@\n1 CHIL @I117@\n1 SOUR @S1@\n0 @F30@ FAM\n1 HUSB @I107@\n1 WIFE @I108@\n1 CHIL @I109@\n1 CHIL @I112@\n1 SOUR @S1@\n0 @F31@ FAM\n1 HUSB @I109@\n1 CHIL @I110@\n1 CHIL @I111@\n1 SOUR @S1@\n0 @F32@ FAM\n1 HUSB @I113@\n1 WIFE @I114@\n1 CHIL @I115@\n1 SOUR @S1@\n0 @F33@ FAM\n1 HUSB @I117@\n1 WIFE @I118@\n1 CHIL @I119@\n1 SOUR @S1@\n0 @F34@ FAM\n1 HUSB @I44@\n1 WIFE @I120@\n1 CHIL @I121@\n1 SOUR @S1@\n0 @F35@ FAM\n1 HUSB @I121@\n1 WIFE @I122@\n1 CHIL @I123@\n1 CHIL @I135@\n1 CHIL @I156@\n1 SOUR @S1@\n0 @F36@ FAM\n1 HUSB @I123@\n1 WIFE @I124@\n1 CHIL @I125@\n1 CHIL @I130@\n1 SOUR @S1@\n0 @F37@ FAM\n1 HUSB @I125@\n1 WIFE @I126@\n1 CHIL @I127@\n1 CHIL @I128@\n1 CHIL @I129@\n1 SOUR @S1@\n0 @F38@ FAM\n1 HUSB @I130@\n1 WIFE @I131@\n1 CHIL @I132@\n1 CHIL @I133@\n1 CHIL @I134@\n1 SOUR @S1@\n0 @F39@ FAM\n1 HUSB @I135@\n1 WIFE @I136@\n1 CHIL @I138@\n1 CHIL @I149@\n1 SOUR @S1@\n0 @F40@ FAM\n1 HUSB @I138@\n1 WIFE @I139@\n1 CHIL @I140@\n1 CHIL @I141@\n1 CHIL @I142@\n1 CHIL @I143@\n1 CHIL @I144@\n1 CHIL @I145@\n1 CHIL @I146@\n1 CHIL @I147@\n1 CHIL @I148@\n1 SOUR @S1@\n0 @F41@ FAM\n1 HUSB @I149@\n1 WIFE @I150@\n1 CHIL @I151@\n1 CHIL @I152@\n1 CHIL @I153@\n1 CHIL @I154@\n1 CHIL @I155@\n1 SOUR @S1@\n0 @F42@ FAM\n1 HUSB @I156@\n1 WIFE @I157@\n1 CHIL @I159@\n1 CHIL @I168@\n1 CHIL @I171@\n1 CHIL @I172@\n1 CHIL @I173@\n1 CHIL @I174@\n1 CHIL @I175@\n1 SOUR @S1@\n0 @F43@ FAM\n1 HUSB @I159@\n1 WIFE @I160@\n1 CHIL @I161@\n1 CHIL @I162@\n1 CHIL @I163@\n1 CHIL @I164@\n1 CHIL @I165@\n1 CHIL @I166@\n1 CHIL @I167@\n1 SOUR @S1@\n0 @F44@ FAM\n1 HUSB @I168@\n1 WIFE @I169@\n1 CHIL @I170@\n1 SOUR @S1@\n0 @F45@ FAM\n1 HUSB @I156@\n1 WIFE @I158@\n1 CHIL @I176@\n1 SOUR @S1@\n0 @F46@ FAM\n1 HUSB @I177@\n1 CHIL @I57@\n1 SOUR @S1@\n0 @F47@ FAM\n1 HUSB @I60@\n1 CHIL @I180@\n1 CHIL @I188@\n1 CHIL @I195@\n1 CHIL @I202@\n1 SOUR @S1@\n0 @F48@ FAM\n1 HUSB @I181@\n1 WIFE @I180@\n1 CHIL @I182@\n1 SOUR @S1@\n0 @F49@ FAM\n1 HUSB @I183@\n1 WIFE @I182@\n1 CHIL @I184@\n1 CHIL @I185@\n1 CHIL @I186@\n1 CHIL @I187@\n1 SOUR @S1@\n0 @F50@ FAM\n1 HUSB @I188@\n1 WIFE @I189@\n1 CHIL @I190@\n1 CHIL @I191@\n1 CHIL @I192@\n1 CHIL @I193@\n1 CHIL @I194@\n1 SOUR @S1@\n0 @F51@ FAM\n1 HUSB @I196@\n1 WIFE @I195@\n1 CHIL @I197@\n1 CHIL @I198@\n1 CHIL @I199@\n1 CHIL @I200@\n1 CHIL @I201@\n1 SOUR @S1@\n0 @F52@ FAM\n1 HUSB @I203@\n1 WIFE @I202@\n1 CHIL @I204@\n1 CHIL @I205@\n1 CHIL @I206@\n1 CHIL @I207@\n1 CHIL @I208@\n1 SOUR @S1@\n0 @F53@ FAM\n1 HUSB @I209@\n1 WIFE @I210@\n1 CHIL @I211@\n1 SOUR @S1@\n0 @F54@ FAM\n1 HUSB @I212@\n1 WIFE @I211@\n1 CHIL @I213@\n1 SOUR @S1@\n0 @F55@ FAM\n1 HUSB @I214@\n1 WIFE @I213@\n1 CHIL @I215@\n1 CHIL @I230@\n1 SOUR @S1@\n0 @F56@ FAM\n1 HUSB @I215@\n1 WIFE @I216@\n1 CHIL @I219@\n1 SOUR @S1@\n0 @F57@ FAM\n1 HUSB @I215@\n1 WIFE @I217@\n1 CHIL @I220@\n1 CHIL @I221@\n1 CHIL @I222@\n1 CHIL @I223@\n1 CHIL @I224@\n1 CHIL @I225@\n1 CHIL @I226@\n1 SOUR @S1@\n0 @F58@ FAM\n1 HUSB @I215@\n1 WIFE @I218@\n1 CHIL @I228@\n1 CHIL @I229@\n1 SOUR @S1@\n0 @F59@ FAM\n1 HUSB @I231@\n1 WIFE @I230@\n1 CHIL @I232@\n1 CHIL @I233@\n1 CHIL @I234@\n1 CHIL @I236@\n1 CHIL @I237@\n1 SOUR @S1@\n0 @F60@ FAM\n1 HUSB @I238@\n1 WIFE @I239@\n1 CHIL @I240@\n1 SOUR @S1@\n0 @F61@ FAM\n1 HUSB @I240@\n1 WIFE @I241@\n1 CHIL @I214@\n1 SOUR @S1@\n0 @F62@ FAM\n1 HUSB @I214@\n1 WIFE @I242@\n1 CHIL @I243@\n1 SOUR @S1@\n0 @F63@ FAM\n1 HUSB @I244@\n1 WIFE @I243@\n1 CHIL @I245@\n1 CHIL @I247@\n1 SOUR @S1@\n0 @F64@ FAM\n1 HUSB @I248@\n1 WIFE @I249@\n1 CHIL @I250@\n1 SOUR @S1@\n0 @F65@ FAM\n1 HUSB @I250@\n1 WIFE @I251@\n1 CHIL @I252@\n1 CHIL @I260@\n1 CHIL @I269@\n1 CHIL @I276@\n1 CHIL @I281@\n1 CHIL @I284@\n1 CHIL @I294@\n1 CHIL @I300@\n1 CHIL @I304@\n1 SOUR @S1@\n0 @F66@ FAM\n1 HUSB @I253@\n1 WIFE @I252@\n1 CHIL @I254@\n1 CHIL @I257@\n1 CHIL @I259@\n1 SOUR @S1@\n0 @F67@ FAM\n1 HUSB @I254@\n1 WIFE @I255@\n1 CHIL @I256@\n1 SOUR @S1@\n0 @F68@ FAM\n1 HUSB @I260@\n1 WIFE @I261@\n1 CHIL @I262@\n1 CHIL @I267@\n1 SOUR @S1@\n0 @F69@ FAM\n1 HUSB @I262@\n1 WIFE @I263@\n1 CHIL @I264@\n1 CHIL @I265@\n1 CHIL @I266@\n1 SOUR @S1@\n0 @F70@ FAM\n1 HUSB @I269@\n1 WIFE @I270@\n1 CHIL @I271@\n1 CHIL @I273@\n1 CHIL @I274@\n1 SOUR @S1@\n0 @F71@ FAM\n1 HUSB @I276@\n1 WIFE @I277@\n1 CHIL @I278@\n1 CHIL @I280@\n1 SOUR @S1@\n0 @F72@ FAM\n1 HUSB @I285@\n1 WIFE @I284@\n1 CHIL @I286@\n1 CHIL @I287@\n1 CHIL @I288@\n1 CHIL @I289@\n1 CHIL @I290@\n1 CHIL @I291@\n1 CHIL @I292@\n1 CHIL @I293@\n1 SOUR @S1@\n0 @F73@ FAM\n1 HUSB @I294@\n1 WIFE @I295@\n1 CHIL @I296@\n1 CHIL @I298@\n1 CHIL @I299@\n1 SOUR @S1@\n0 @F74@ FAM\n1 HUSB @I300@\n1 WIFE @I301@\n1 CHIL @I302@\n1 CHIL @I303@\n1 SOUR @S1@\n0 @F75@ FAM\n1 HUSB @I305@\n1 WIFE @I304@\n1 CHIL @I306@\n1 CHIL @I308@\n1 SOUR @S1@\n0 @F76@ FAM\n1 HUSB @I9@\n1 WIFE @I8@\n1 SOUR @S1@\n0 @F77@ FAM\n1 HUSB @I21@\n1 WIFE @I20@\n1 SOUR @S1@\n0 @F78@ FAM\n1 HUSB @I25@\n1 WIFE @I24@\n1 SOUR @S1@\n0 @F79@ FAM\n1 HUSB @I31@\n1 WIFE @I30@\n1 SOUR @S1@\n0 @F80@ FAM\n1 HUSB @I47@\n1 WIFE @I48@\n1 SOUR @S1@\n0 @F81@ FAM\n1 HUSB @I52@\n1 WIFE @I51@\n1 SOUR @S1@\n0 @F82@ FAM\n1 HUSB @I54@\n1 WIFE @I53@\n1 SOUR @S1@\n0 @F83@ FAM\n1 HUSB @I56@\n1 WIFE @I55@\n1 SOUR @S1@\n0 @F84@ FAM\n1 HUSB @I75@\n1 WIFE @I76@\n1 SOUR @S1@\n0 @F85@ FAM\n1 HUSB @I99@\n1 WIFE @I100@\n1 SOUR @S1@\n0 @F86@ FAM\n1 HUSB @I101@\n1 WIFE @I102@\n1 SOUR @S1@\n0 @F87@ FAM\n1 HUSB @I115@\n1 WIFE @I116@\n1 SOUR @S1@\n0 @F88@ FAM\n1 HUSB @I135@\n1 WIFE @I137@\n1 SOUR @S1@\n0 @F89@ FAM\n1 HUSB @I60@\n1 WIFE @I178@\n1 SOUR @S1@\n0 @F90@ FAM\n1 HUSB @I60@\n1 WIFE @I179@\n1 SOUR @S1@\n0 @F91@ FAM\n1 HUSB @I226@\n1 WIFE @I227@\n1 SOUR @S1@\n0 @F92@ FAM\n1 HUSB @I235@\n1 WIFE @I234@\n1 SOUR @S1@\n0 @F93@ FAM\n1 HUSB @I246@\n1 WIFE @I245@\n1 SOUR @S1@\n0 @F94@ FAM\n1 HUSB @I258@\n1 WIFE @I257@\n1 SOUR @S1@\n0 @F95@ FAM\n1 HUSB @I267@\n1 WIFE @I268@\n1 SOUR @S1@\n0 @F96@ FAM\n1 HUSB @I271@\n1 WIFE @I272@\n1 SOUR @S1@\n0 @F97@ FAM\n1 HUSB @I274@\n1 WIFE @I275@\n1 SOUR @S1@\n0 @F98@ FAM\n1 HUSB @I278@\n1 WIFE @I279@\n1 SOUR @S1@\n0 @F99@ FAM\n1 HUSB @I281@\n1 WIFE @I282@\n1 SOUR @S1@\n0 @F100@ FAM\n1 HUSB @I281@\n1 WIFE @I283@\n1 SOUR @S1@\n0 @F101@ FAM\n1 HUSB @I296@\n1 WIFE @I297@\n1 SOUR @S1@\n0 @F102@ FAM\n1 HUSB @I306@\n1 WIFE @I307@\n1 SOUR @S1@\n0 @F103@ FAM\n1 HUSB @I308@\n1 WIFE @I309@\n1 SOUR @S1@\n0 TRLR\n"}], "links": [], "home": "Rajah Solimán (Rahang Mura)", "study": true, "built": "20 Nov 2026"};
+</script>
+<script>
+(function(){
+// people shared by the family tree (S ids, FamilySearch ids) and the Santiago 1990 study tree (R ids)
+const STUDY=[['S:@I1324@','','I10'],['S:@I1312@','G6ZG-K4Y','I11'],['S:@I1311@','G6ZG-2VR','I23'],['S:@I1310@','PMFV-ZVY','I26'],['S:@I1309@','PMFJ-9CQ','I69'],['S:@I1308@','PMFJ-XMX','I70'],['S:@I1307@','PMFJ-467','I71'],['S:@I1306@','PMFJ-4Y2','I78'],['S:@I1305@','PMFJ-73F','I77'],['S:@I1303@','PM6L-RFK','I75']];
+const IN_STUDY=!!(DATA&&DATA.study),ON_SITE=/infinitefate\.com$/.test(location.hostname)||location.protocol==='file:';
+function studyLink(p){if(!ON_SITE||!p)return'';if(IN_STUDY){const r=STUDY.find(x=>'R:@'+x[2]+'@'===p.id);return r?`<div class="fsl"><a href="../#${toHash(r[0])}">Open in our family tree ↗</a></div>`:''}
+  const r=STUDY.find(x=>x[0]===p.id||x[0]===p.srcId||(x[1]&&x[1]===p.fsid));return r?`<div class="fsl"><a href="soliman/#R-${r[2]}">See in the Solimán study tree (Santiago 1990) ↗</a></div>`:''}
+// a link may name a research id (S:@I1305@) for someone stored on the site under a new id: find them by source id or FamilySearch id
+function resolveId(id){if(!id||P[id])return id;const r=STUDY.find(x=>x[0]===id);const q=Object.values(P).find(p=>p.srcId===id||(r&&r[1]&&p.fsid===r[1]));return q?q.id:id}
+let pendingStart=null;
+setTimeout(()=>{if(!ON_SITE||IN_STUDY||document.getElementById('study-link'))return;const t=document.querySelector('header .tools');if(!t)return;const a=document.createElement('a');a.id='study-link';a.className='btn';a.href='soliman/';a.textContent='Solimán study tree';a.style.textDecoration='none';t.insertBefore(a,document.getElementById('export'))},0);
+const W=168,H=64,GX=14,GY=60;
+const P={},F={};
+const CLIP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 7"/></svg>';
+const SIL='<svg viewBox="0 0 30 38" aria-hidden="true"><circle cx="15" cy="11" r="8"/><path d="M1 38c0-9 6-15 14-15s14 6 14 15z"/></svg>';
+
+// ---------- GEDCOM ----------
+function parseGed(text,pfx,label,PP,FF){PP=PP||P;FF=FF||F;
+  let cur=null,l1=null;
+  for(const raw of text.split(/\r?\n/)){
+    const m=raw.match(/^\s*(\d+)\s+(@[^@]+@\s+)?(\S+)(?:\s(.*))?$/); if(!m)continue;
+    const lv=+m[1],xref=m[2]&&m[2].trim(),tag=m[3],val=(m[4]||'').trim();
+    if(lv===0){l1=null;cur=null;
+      if(xref&&tag==='INDI'){cur=PP[pfx+xref]={id:pfx+xref,name:'',sex:'U',ev:{},famc:[],fams:[],notes:[],src:label,t:'I'}}
+      else if(xref&&tag==='FAM'){cur=FF[pfx+xref]={id:pfx+xref,husb:null,wife:null,chil:[],ev:{},t:'F'}}
+      continue}
+    if(!cur)continue;
+    if(lv===1){l1=tag;
+      if(cur.t==='I'){
+        if(tag==='NAME'){cur.nameN=(cur.nameN||0)+1;if(!cur.name)cur.name=val;else cur.altName=val}
+        else if(tag==='SEX')cur.sex=(val[0]||'U').toUpperCase();
+        else if(tag==='FAMC')cur.famc.push(pfx+val);
+        else if(tag==='FAMS')cur.fams.push(pfx+val);
+        else if(tag==='NOTE')cur.notes.push(val);
+        else if(tag==='_TREEID')cur.treeId=val;
+        else if(tag==='_FSFTID'||tag==='_FSID')cur.fsid=val.trim().toUpperCase();
+        else if(tag==='_MATCH')cur.matchNames=val.split('|').map(x=>x.trim()).filter(Boolean);
+        else if(tag==='_RENAME')cur.rename=true;
+        else if(/^(BIRT|CHR|BAPM|DEAT|BURI)$/.test(tag))cur.ev[tag]=cur.ev[tag]||{};
+      }else{
+        if(tag==='HUSB')cur.husb=pfx+val;
+        else if(tag==='WIFE')cur.wife=pfx+val;
+        else if(tag==='CHIL')cur.chil.push(pfx+val);
+        else if(tag==='MARR')cur.ev.MARR=cur.ev.MARR||{};
+      }
+    }else if(lv===2){
+      if((tag==='CONT'||tag==='CONC')&&l1==='NOTE'&&cur.notes.length){cur.notes[cur.notes.length-1]+=(tag==='CONT'?'\n':'')+val}
+      else if(cur.ev[l1]&&(tag==='DATE'||tag==='PLAC'))cur.ev[l1][tag==='PLAC'?'place':'date']=val;
+      else if(tag==='CAUS'&&(l1==='DEAT'||l1==='BURI')&&cur.ev[l1])cur.ev[l1].cause=val;
+      else if(l1==='NAME'&&tag==='GIVN'&&!cur.given)cur.given=val;
+      else if(l1==='NAME'&&tag==='NICK'&&!cur.nick)cur.nick=val;
+      else if(l1==='NAME'&&tag==='TYPE'&&/birth|maiden/i.test(val)&&cur.nameN>1&&cur.altName&&!cur.maiden)cur.maiden=(cur.altName.match(/\/([^/]*)\//)||[])[1]||'';
+    }
+  }
+}
+function niceName(n){return (n||'Unknown').replace(/\//g,'').replace(/\s+/g,' ').trim()||'Unknown'}
+function year(d){if(!d)return'';const y=(d.match(/\d{4}/)||[''])[0];if(!y)return'';return(/^(ABT|EST|CAL|BEF|AFT)/i.test(d)?'c.':'')+y}
+function birthOf(p){return p.ev.BIRT||p.ev.CHR||p.ev.BAPM||{}}
+function deathOf(p){return p.ev.DEAT||p.ev.BURI||{}}
+function causeOf(p){const c=(p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause);if(c)return c;
+  for(const n of p.notes||[]){const m=n.match(/\b(?:died|death) (?:of|from) ([a-z][a-z \-']{2,40}?)(?=[.,;(]| aged| at | in |$)/i)||n.match(/\bcause of death:? ([a-z][a-z \-']{2,40}?)(?=[.,;(]|$)/i);if(m)return m[1].trim()}return''}
+const CAUSE_GROUPS=[['Accident or violence',/accident|vehicular|drown|ahog|killed|injur|wound|herida|murder|\bwar\b/i],['Cholera',/c[oh]+olera/i],['Malaria',/malaria|paludism/i],['Tuberculosis',/tubercul|tisis|phthisis|consumption|\bp?tb\b/i],['Convulsions',/convuls/i],['Congenital debility or prematurity',/congenital|cong[eé]nit|prematur/i],['Stillbirth',/still ?-?born|stillbirth|nacido muerto/i],['Beriberi',/beriberi/i],['Pneumonia',/pneumon|neumon/i],['Bronchitis or asthma',/bronch|bronqu|asthma|asma|pulmon/i],['Fever',/fever|fiebre|calentura|typhoid|tifoidea/i],['Diarrhea or dysentery',/diarr|disenter|dysenter|enteritis|gastro/i],['Stroke',/cerebral|apoplex|stroke|hemorrhage|\bcva\b/i],['Heart or blood pressure',/heart|cardi|coraz[oó]n|palpit|hypertens/i],['Kidney disease',/nephr|kidney|ri[ñn][oó]n/i],['Diabetes',/diabet/i],['Cancer',/cancer|c[aá]ncer|carcinom|malignan|tumou?r/i],['Smallpox, measles or chickenpox',/viruela|smallpox|measles|sarampi|varicel|chickenpox/i],['Tetanus',/tetan|pasmo/i],['Childbirth',/parto|childbirth|puerper/i],['Old age',/old age|vejez|senil|senectud/i]];
+function causeGroup(c){for(const[g,re]of CAUSE_GROUPS)if(re.test(c))return g;return c?c.charAt(0).toUpperCase()+c.slice(1).toLowerCase():''}
+function years(p){const b=year(birthOf(p).date),d=year(deathOf(p).date);if(!b&&!d)return'';return (b||'?')+' – '+(d||(isDead(p)?'?':''))}
+function isDead(p){if(p.ev.DEAT||p.ev.BURI)return true;const y=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return y&&y<1926}
+function fmtDate(d){if(!d)return'';return d.replace(/\bABT\b/i,'about').replace(/\bBEF\b/i,'before').replace(/\bAFT\b/i,'after').replace(/\bEST\b/i,'est.').replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/g,m=>m[0]+m.slice(1).toLowerCase())}
+
+// load base data (research GEDCOMs), then apply edits saved from this page
+(DATA&&DATA.sources||[]).forEach(s=>parseGed(s.ged,s.prefix+':',s.label));
+(DATA&&DATA.links||[]).forEach((l,i)=>{
+  const find=n=>Object.values(P).find(p=>niceName(p.name).toLowerCase()===n.toLowerCase());
+  const h=find(l.husb),w=find(l.wife);if(!h||!w)return;
+  const id='L:@F'+i+'@';F[id]={id,husb:h.id,wife:w.id,chil:[],ev:l.date?{MARR:{date:l.date}}:{},t:'F'};
+});
+const BASE_P=JSON.parse(JSON.stringify(P)),BASE_F=JSON.parse(JSON.stringify(F));
+let OV_P={},OV_F={};
+function rebuild(){
+  for(const k in P)delete P[k];for(const k in F)delete F[k];
+  const bp=JSON.parse(JSON.stringify(BASE_P)),bf=JSON.parse(JSON.stringify(BASE_F));Object.assign(P,bp);Object.assign(F,bf);
+  for(const id in OV_F){const o=OV_F[id];if(o.deleted){delete F[id];continue}
+    F[id]={id,husb:o.husb||null,wife:o.wife||null,chil:(o.chil||[]).slice(),ev:(o.marrDate||o.marrPlace)?{MARR:{date:o.marrDate||'',place:o.marrPlace||''}}:{},t:'F'}}
+  for(const id in OV_P){const o=OV_P[id];if(o.deleted){delete P[id];continue}
+    const p=P[id]||(P[id]={id,ev:{},notes:[],src:'Added in this tool',t:'I'});
+    p.name=o.name||'';p.sex=o.sex||'U';p.edited=true;
+    const oc=(p.ev.DEAT&&p.ev.DEAT.cause)||'';[['BIRT','birth'],['DEAT','death']].forEach(([t,k])=>{const d=o[k+'Date']||'',pl=o[k+'Place']||'';if(d||pl)p.ev[t]={date:d,place:pl};else delete p.ev[t]});
+    {const c=o.deathCause!==undefined?o.deathCause:oc;if(c){p.ev.DEAT=p.ev.DEAT||{date:'',place:''};p.ev.DEAT.cause=c}}
+    p.notes=o.note?[o.note]:[];p.middle=o.middle;p.maiden=o.maiden||'';p.nick=o.nick||'';p.fsid=o.fsid||'';p.notSame=o.notSame||[];p.srcId=o.srcId||''}
+  for(const id in P){P[id].famc=[];P[id].fams=[]}
+  // the same child listed twice (in one family, or in two families of the same parents) is drawn once, under the fuller family
+  Object.values(F).forEach(f=>{f.chil=[...new Set(f.chil)]});
+  {const byChild={};Object.values(F).forEach(f=>f.chil.forEach(c=>(byChild[c]=byChild[c]||[]).push(f)));
+   for(const c in byChild){const fs=byChild[c];if(fs.length<2)continue;
+     fs.forEach(a=>{const pa=[a.husb,a.wife].filter(Boolean);if(fs.some(b=>{if(a===b||!b.chil.includes(c))return false;const pb=[b.husb,b.wife].filter(Boolean);
+       return pa.every(x=>pb.includes(x))&&(pa.length<pb.length||a.id>b.id)}))a.chil=a.chil.filter(x=>x!==c)})}}
+  Object.values(F).forEach(f=>{if(f.husb&&!P[f.husb])f.husb=null;if(f.wife&&!P[f.wife])f.wife=null;f.chil=f.chil.filter(c=>P[c]);
+    [f.husb,f.wife].forEach(x=>x&&P[x].fams.push(f.id));f.chil.forEach(c=>P[c].famc.push(f.id))});
+  const n=Object.keys(OV_P).length+Object.keys(OV_F).length;
+  document.getElementById('meta').textContent=Object.keys(P).length+' people'+(DATA&&DATA.built?' · research '+DATA.built:'')+(n?' · '+n+' edits':'');
+}
+rebuild();
+
+const parentsOf=id=>{const p=P[id];if(!p)return null;const f=p.famc.map(x=>F[x]).find(Boolean);return f&&(f.husb||f.wife)?f:null};
+const famsOf=id=>(P[id]?P[id].fams:[]).map(x=>F[x]).filter(Boolean);
+const spouseIn=(f,id)=>f.husb===id?f.wife:f.husb;
+const sortKids=ch=>ch.slice();
+
+// ---------- layout ----------
+let boxes=[],paths=[],UP=3,DOWN=2;
+const rowY=r=>r*(H+GY);
+function box(pid,x,r){boxes.push({pid,x,y:rowY(r)});return{x,cx:x+W/2,top:rowY(r),bot:rowY(r)+H}}
+function bracket(a,b,k){const y=a.bot+8+k*6;paths.push(`M${a.cx} ${a.bot}V${y}H${b.cx}V${b.bot}`);return{x:(a.cx+b.cx)/2,y}}
+function drop(anchor,kids){if(!kids.length)return;const top=kids[0].top,my=top-20;const xs=kids.map(k=>k.cx).concat(anchor.x);
+  let d=`M${anchor.x} ${anchor.y}V${my}M${Math.min(...xs)} ${my}H${Math.max(...xs)}`;kids.forEach(k=>d+=`M${k.cx} ${my}V${top}`);paths.push(d)}
+
+const mDesc=new Map();
+function measureDesc(pid,gen,max){const key=pid+'|'+gen+'|'+max;if(mDesc.has(key))return mDesc.get(key);
+  const fams=famsOf(pid),ns=fams.filter(f=>spouseIn(f,pid)).length,unit=W+ns*(W+GX);let cw=0,n=0;
+  if(gen<max)fams.forEach(f=>f.chil.forEach(c=>{cw+=measureDesc(c,gen+1,max);n++}));
+  const w=Math.max(unit,cw+Math.max(0,n-1)*GX);mDesc.set(key,w);return w}
+function placeDesc(pid,gen,max,x0,r){
+  const B=measureDesc(pid,gen,max),fams=famsOf(pid),ns=fams.filter(f=>spouseIn(f,pid)).length,unit=W+ns*(W+GX);
+  const me=box(pid,x0+(B-unit)/2,r);let sx=me.x+W+GX,k=0;const anchors=[];
+  fams.forEach(f=>{const s=spouseIn(f,pid);if(s){const sb=box(s,sx,r);sx+=W+GX;anchors.push(bracket(me,sb,k++))}else anchors.push({x:me.cx,y:me.bot})});
+  if(gen<max){let n=0,cw=0;fams.forEach(f=>f.chil.forEach(c=>{cw+=measureDesc(c,gen+1,max);n++}));cw+=Math.max(0,n-1)*GX;
+    let cx=x0+(B-cw)/2;fams.forEach((f,i)=>{const kids=[];f.chil.forEach(c=>{const w=measureDesc(c,gen+1,max);kids.push(placeDesc(c,gen+1,max,cx,r+1));cx+=w+GX});drop(anchors[i],kids)})}
+  return me}
+
+const mPed=new Map();
+function pedW(pid,depth){if(!pid)return 0;const key=pid+'|'+depth;if(mPed.has(key))return mPed.get(key);
+  const f=parentsOf(pid);let w=W;if(f&&depth<UP){w=Math.max(W,coupleW(f,depth+1))}mPed.set(key,w);return w}
+function coupleW(f,depth){const a=pedW(f.husb,depth),b=pedW(f.wife,depth);return a+b+(a&&b?GX:0)}
+function placePerson(pid,depth,x0,side){const w=pedW(pid,depth);const me=box(pid,side==='L'?x0+w-W:x0,-depth);
+  const f=parentsOf(pid);if(f&&depth<UP){const cw=coupleW(f,depth+1);const a=placeCouple(f,depth+1,x0+(w-cw)/2);drop(a,[me])}return me}
+function placeCouple(f,depth,x0){let a=null,b=null;
+  if(f.husb)a=placePerson(f.husb,depth,x0,'L');
+  if(f.wife)b=placePerson(f.wife,depth,x0+(f.husb?pedW(f.husb,depth)+GX:0),'R');
+  if(a&&b)return bracket(a,b,0);const o=a||b;return{x:o.cx,y:o.bot}}
+// parent row (row -1) with that parent's own siblings
+function parentRegion(pid){const gp=UP>=2?parentsOf(pid):null;const sibs=gp?gp.chil.filter(c=>c!==pid):[];
+  const n=sibs.length+1,rw=n*W+(n-1)*GX,cw=gp?coupleW(gp,2):0;return{gp,sibs,rw,cw,w:Math.max(rw,cw)}}
+function placeParent(pid,x0,side){const R=parentRegion(pid);const list=side==='L'?R.sibs.concat(pid):[pid].concat(R.sibs);
+  const rx=side==='L'?x0+R.w-R.rw:x0;let me=null;const kids=list.map((c,i)=>{const b=box(c,rx+i*(W+GX),-1);if(c===pid)me=b;return b});
+  if(R.gp){const center=rx+R.rw/2;let gx=center-R.cw/2;gx=Math.max(x0,Math.min(gx,x0+R.w-R.cw));const a=placeCouple(R.gp,2,gx);
+    drop(a,kids.slice().sort((p,q)=>p.cx-q.cx))}
+  return me}
+
+function layout(focus){
+  boxes=[];paths=[];mDesc.clear();mPed.clear();
+  const pf=UP>=1?parentsOf(focus):null;
+  if(!pf){placeDesc(focus,0,DOWN,0,0);return}
+  let anchor,x=0,a=null,b=null;
+  if(pf.husb){const R=parentRegion(pf.husb);a=placeParent(pf.husb,0,'L');x=R.w+GX}
+  if(pf.wife){b=placeParent(pf.wife,x,'R')}
+  anchor=a&&b?bracket(a,b,0):{x:(a||b).cx,y:(a||b).bot};
+  const sibs=pf.chil.length?pf.chil:[focus];
+  const SD=Math.min(DOWN,1); // brothers and sisters also show their children (nieces and nephews)
+  const ws=sibs.map(s=>measureDesc(s,0,s===focus?DOWN:SD));const tw=ws.reduce((s,w)=>s+w,0)+(sibs.length-1)*GX;
+  let cx=anchor.x-tw/2;const kids=[];
+  sibs.forEach((s,i)=>{kids.push(placeDesc(s,0,s===focus?DOWN:SD,cx,0));cx+=ws[i]+GX});
+  drop(anchor,kids);
+}
+
+// ---------- render ----------
+const stage=document.getElementById('stage'),svg=document.getElementById('lines'),sizer=document.getElementById('sizer'),scroller=document.getElementById('scroller');
+let focusId=null,selId=null,scale=1,dims={w:0,h:0},fbox=null;
+const PAD=60;
+function render(keepView){if(pendingStart){const q=resolveId(pendingStart);if(P[q]){pendingStart=null;focusId=q;keepView=false;setTimeout(()=>openSheet(q),0)}}
+  if(!P[focusId]){const f=homeId();if(!f){stage.querySelectorAll('.person,.more').forEach(e=>e.remove());svg.innerHTML='';return}focusId=f}
+  layout(focusId);
+  const minX=Math.min(...boxes.map(b=>b.x)),minY=Math.min(...boxes.map(b=>b.y));
+  const maxX=Math.max(...boxes.map(b=>b.x+W)),maxY=Math.max(...boxes.map(b=>b.y+H));
+  const ox=PAD-minX,oy=PAD-minY;dims={w:maxX-minX+PAD*2,h:maxY-minY+PAD*2};
+  stage.querySelectorAll('.person,.more').forEach(e=>e.remove());
+  svg.setAttribute('width',dims.w);svg.setAttribute('height',dims.h);
+  svg.innerHTML=`<g transform="translate(${ox} ${oy})">`+paths.map(d=>`<path d="${d}"/>`).join('')+'</g>';
+  const shown=new Set(boxes.map(b=>b.pid));const frag=document.createDocumentFragment();fbox=null;
+  boxes.forEach(b=>{const p=P[b.pid];const el=document.createElement('button');el.type='button';
+    el.className='person '+(p.sex==='M'||p.sex==='F'?p.sex:'U')+(isDead(p)?' dec':'')+(b.pid===focusId?' focus':'')+(b.pid===selId?' sel':'');
+    el.style.cssText=`left:${b.x+ox}px;top:${b.y+oy}px;width:${W}px;height:${H}px`;el.dataset.id=b.pid;
+    const pic=profileOf(b.pid);el.innerHTML=`<span class="ph">${pic?`<img src="${esc(pic.url)}" alt="" loading="lazy">`:SIL}</span><span class="tx"><span class="nm"></span><span class="yr"></span></span>`;
+    el.querySelector('.nm').textContent=plateName(p);el.querySelector('.yr').textContent=years(p);
+    const nf=mediaOf(b.pid).length;if(nf){const c=document.createElement('span');c.className='clip';c.innerHTML=CLIP+nf;c.title=nf+' attached file'+(nf>1?'s':'');el.appendChild(c)}
+    frag.appendChild(el);if(b.pid===focusId&&!fbox)fbox={x:b.x+ox,y:b.y+oy};
+    const pf=parentsOf(b.pid);const hidUp=pf&&![pf.husb,pf.wife].some(x=>x&&shown.has(x));
+    const kids=famsOf(b.pid).flatMap(f=>f.chil);const hidDn=kids.length&&!kids.some(c=>shown.has(c));
+    if(hidUp){const m=document.createElement('span');m.className='more';m.textContent="▲ more";m.style.cssText=`left:${b.x+ox+W/2-24}px;top:${b.y+oy-18}px`;frag.appendChild(m)}
+    if(hidDn){const m=document.createElement('span');m.className='more';m.textContent='▼ '+kids.length;m.style.cssText=`left:${b.x+ox+W/2-16}px;top:${b.y+oy+H+3}px`;frag.appendChild(m)}
+  });
+  stage.appendChild(frag);applyScale();
+  if(!keepView&&fbox)centerOn(fbox);
+}
+function applyScale(){stage.style.transform=`scale(${scale})`;sizer.style.width=dims.w*scale+'px';sizer.style.height=dims.h*scale+'px'}
+function centerOn(b){scroller.scrollLeft=(b.x+W/2)*scale-scroller.clientWidth/2;scroller.scrollTop=(b.y+H/2)*scale-scroller.clientHeight/2}
+function zoomTo(s,cx,cy){s=Math.max(.3,Math.min(2,s));if(cx==null){cx=scroller.clientWidth/2;cy=scroller.clientHeight/2}
+  const wx=(scroller.scrollLeft+cx)/scale,wy=(scroller.scrollTop+cy)/scale;scale=s;applyScale();scroller.scrollLeft=wx*scale-cx;scroller.scrollTop=wy*scale-cy;
+  try{localStorage.setItem('ft-zoom',String(scale))}catch(e){}}
+
+// ---------- person sheet ----------
+const sheet=document.getElementById('sheet');
+function chip(id){const p=P[id];return p?`<button type="button" data-go="${id}">${esc(plateName(p))}</button>`:''}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function evRow(label,e){if(!e||(!e.date&&!e.place))return'';return`<dt>${label}</dt><dd>${esc(fmtDate(e.date||''))}${e.date&&e.place?'<br>':''}<span style="color:var(--muted)">${esc(e.place||'')}</span></dd>`}
+function openSheet(id){selId=id;const p=P[id];
+  document.querySelectorAll('.person.sel').forEach(e=>e.classList.remove('sel'));document.querySelectorAll(`.person[data-id="${CSS.escape(id)}"]`).forEach(e=>e.classList.add('sel'));
+  const pf=parentsOf(id),par=pf?[pf.husb,pf.wife].filter(Boolean):[];
+  const sibs=pf?pf.chil.filter(c=>c!==id):[];
+  const fams=famsOf(id);const sps=fams.map(f=>spouseIn(f,id)).filter(Boolean);const kids=fams.flatMap(f=>f.chil);
+  const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(plateName(P[spouseIn(f,id)]))+')':''}`:'').filter(Boolean);
+  sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
+   ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(plateName(p))}</h2>${p.nick||p.maiden?`<div class="sub">${[p.nick?'“'+esc(p.nick)+'”':'',p.maiden?(()=>{const n=nameParts(p);return 'Born '+esc(niceName(`${n.given} ${n.middle} ${p.maiden}`))})():''].filter(Boolean).join(' · ')}</div>`:''}<div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
+   ${IN_STUDY?'':`<div class="fsl">${p.fsid?`<a href="${esc(fsUrl(p.fsid))}" target="_blank" rel="noopener">FamilySearch ${esc(p.fsid)} ↗</a>`:`<a href="${esc(fsSearch(p))}" target="_blank" rel="noopener">Find on FamilySearch ↗</a>${canEditP(id)?' <small>then copy their ID into Edit</small>':''}`}</div>`}
+   <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
+   ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
+   <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
+   <dl>${evRow('Born',p.ev.BIRT)}${evRow('Baptized',p.ev.CHR||p.ev.BAPM)}${evRow('Died',p.ev.DEAT)}${evRow('Buried',p.ev.BURI)}${causeOf(p)?`<dt>Cause of death</dt><dd>${esc(causeOf(p))}</dd>`:''}
+   ${marr.length?`<dt>Married</dt><dd>${marr.join('<br>')}</dd>`:''}
+   ${par.length?`<dt>Parents</dt><dd class="rel">${par.map(chip).join('')}</dd>`:''}
+   ${sps.length?`<dt>Spouse</dt><dd class="rel">${sps.map(chip).join('')}</dd>`:''}
+   ${sibs.length?`<dt>Siblings</dt><dd class="rel">${sibs.map(chip).join('')}</dd>`:''}
+   ${kids.length?`<dt>Children</dt><dd class="rel">${kids.map(chip).join('')}</dd>`:''}</dl>
+   ${studyLink(p)}
+   ${p.notes.map(n=>`<div class="note">${esc(n)}</div>`).join('')}
+   ${filesSection(id)}`;
+  sheet.hidden=false;sheet.scrollTop=0}
+sheet.addEventListener('click',e=>{const t=e.target.closest('button,img[data-media]');if(!t)return;
+  if(t.dataset.close!=null){sheet.hidden=true;selId=null;document.querySelectorAll('.person.sel').forEach(e=>e.classList.remove('sel'));return}
+  if(t.dataset.focus){setFocus(t.dataset.focus);return}
+  if(t.dataset.edit){openForm({mode:'edit',id:t.dataset.edit});return}
+  if(t.dataset.back){openSheet(t.dataset.back);return}
+  if(t.dataset.acct){window.__adminTools.createAccount(t.dataset.acct,niceName(P[t.dataset.acct].name));return}
+  if(t.dataset.unlink){if(t.dataset.armed){const[k,f,x]=t.dataset.unlink.split('|');const self=document.getElementById('edform')&&selId;unlink(k,f,x,selId)}else{t.dataset.armed='1';t.textContent='Tap again to remove'}return}
+  if(t.dataset.del){if(t.dataset.armed){deletePerson(t.dataset.del)}else{t.dataset.armed='1';t.textContent='Tap again to delete'}return}
+  if(t.dataset.media){openLb(t.dataset.media);return}
+  if(t.dataset.attach){pickFor=t.dataset.attach;pickProfile=false;const fp=document.getElementById('filepick');fp.accept='image/*,application/pdf';fp.multiple=true;fp.click();return}
+  if(t.dataset.profpick){pickFor=t.dataset.profpick;pickProfile=true;const fp=document.getElementById('filepick');fp.accept='image/*';fp.multiple=false;fp.click();return}
+  if(t.dataset.go){const id=t.dataset.go;const el=document.querySelector(`.person[data-id="${CSS.escape(id)}"]`);if(el){openSheet(id);centerOn({x:parseFloat(el.style.left),y:parseFloat(el.style.top)})}else{setFocus(id)}}});
+sheet.addEventListener('change',e=>{const s=e.target.closest('select[data-add]');if(s&&s.value)openForm({mode:'add',rel:s.value,anchor:s.dataset.add})});
+
+// ---------- editing (saved to the page's shared database) ----------
+let db=null;
+const canEdit=()=>!!db&&!db.readOnly;
+// on the website, members other than admins get a list of the people they may change (worked out by the server)
+function limited(){const pm=window.__PERM;return !!(pm&&pm.editable)}
+const canEditP=id=>canEdit()&&(!limited()||window.__PERM.editable.has(id));
+const keyOf=id=>id.replace(/[:@]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fsNorm=v=>{v=(v||'').trim();const m=v.match(/([A-Z0-9]{4}-[A-Z0-9]{3,4})\b/i);return m?m[1].toUpperCase():v.toUpperCase()};
+const fsUrl=id=>'https://www.familysearch.org/tree/person/details/'+encodeURIComponent(id);
+function fsSearch(p){const n=nameParts(p),b=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return'https://www.familysearch.org/search/tree/results?q.givenName='+encodeURIComponent(n.given)+'&q.surname='+encodeURIComponent(n.surname)+(b?'&q.birthLikeDate.from='+(b-2)+'&q.birthLikeDate.to='+(b+2):'')}
+function splitName(n){const m=(n||'').match(/^([^/]*)\/([^/]*)\/?(.*)$/);return m?{given:m[1].trim(),surname:m[2].trim(),suffix:m[3].trim()}:{given:(n||'').trim(),surname:'',suffix:''}}
+// name parts with the middle name separated (stored, or guessed from the mother's surname)
+function nameParts(p){const nm=splitName(p.name);nm.middle='';const w=nm.given.split(/\s+/).filter(Boolean);
+  if(p.middle!=null){if(p.middle&&nm.given.endsWith(' '+p.middle)){nm.middle=p.middle;nm.given=nm.given.slice(0,-p.middle.length-1)}}
+  else{const pf=parentsOf(p.id),mom=pf&&pf.wife&&P[pf.wife];const ms=mom&&(mom.maiden||splitName(mom.name).surname);
+    if(w.length>1&&ms&&w[w.length-1].toLowerCase()===ms.toLowerCase()){nm.middle=w.pop();nm.given=w.join(' ')}}
+  return nm}
+// name plate: married women (maiden name filled in) show first name + maiden name + married surname
+function plateName(p){if(!p)return'';if(!p.maiden)return niceName(p.name);const n=nameParts(p);return niceName(`${n.given} ${p.maiden} ${n.surname} ${n.suffix}`)}
+function status(msg,err){const s=document.getElementById('savestate');if(s){s.textContent=msg;s.style.color=err?'#c0392b':''}}
+function openForm(o){
+  const p=o.mode==='edit'?P[o.id]:null;const a=o.anchor?P[o.anchor]:null;
+  const nm=p?nameParts(p):Object.assign(splitName(a&&(o.rel==='child'||o.rel==='sibling')?'/'+splitName(a.name).surname+'/':''),{middle:''});
+  const sex=p?p.sex:o.rel==='father'?'M':o.rel==='mother'?'F':o.rel==='spouse'&&a?(a.sex==='M'?'F':a.sex==='F'?'M':'U'):'U';
+  const b=p?(p.ev.BIRT||{}):{},d=p?(p.ev.DEAT||{}):{};
+  let famPick='';
+  if(o.mode==='add'&&o.rel==='child'){const fs=famsOf(o.anchor);
+    famPick=`<label>With<select id="ed-fam">${fs.map(f=>{const s=spouseIn(f,o.anchor);return`<option value="${f.id}">${s?esc(plateName(P[s])):'Unknown partner'}</option>`}).join('')}<option value="new">Unknown / other partner</option></select></label>`}
+  if(o.mode==='add'&&(o.rel==='father'||o.rel==='mother')){const pf=parentsOf(o.anchor);if(pf&&pf[o.rel==='father'?'husb':'wife']){status('');sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>Already has a ${o.rel}</h2><p class="sub">Edit the existing ${o.rel} instead.</p><button class="btn" type="button" data-back="${o.anchor}">Back</button>`;return}}
+  const title=o.mode==='edit'?'Edit '+esc(plateName(p)):'Add '+({father:'father',mother:'mother',spouse:'spouse',child:'child',sibling:'brother or sister'}[o.rel])+' of '+esc(plateName(a));
+  sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>${title}</h2>
+  <form id="edform" class="form">
+   ${o.mode==='add'?`<div class="exist"><label>Already in the tree? Pick them here<input id="ed-exist" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-exres" hidden></div></div>
+   <p class="hint" id="ed-chosen" hidden></p><p class="hint" id="ed-or">Or add a new person:</p>`:''}
+   <div class="two"><label>First name<input id="ed-given" value="${esc(nm.given)}" autocomplete="off"><small class="fh">Given name(s)</small></label><label>Middle name<input id="ed-middle" value="${esc(nm.middle)}" autocomplete="off"><small class="fh">Mother's maiden surname. Keep it the same after marriage.</small></label></div>
+   <div class="two"><label>Last name<input id="ed-surname" value="${esc(nm.surname)}" autocomplete="off"><small class="fh">Current surname. For married women, the husband's surname.</small></label><label>Maiden name<input id="ed-maiden" value="${esc(p&&p.maiden||'')}" autocomplete="off"><small class="fh">Married women only: her own surname at birth.</small></label></div>
+   <div class="two"><label>Nickname<input id="ed-nick" value="${esc(p&&p.nick||'')}" autocomplete="off"><small class="fh">What family calls them</small></label><label>Suffix<input id="ed-suffix" value="${esc(nm.suffix)}" placeholder="Sr., Jr., III" autocomplete="off"></label></div>
+   <label>FamilySearch ID<input id="ed-fsid" value="${esc(p&&p.fsid||'')}" placeholder="e.g. LZ4K-ABC" autocomplete="off" autocapitalize="characters"><small class="fh">From their FamilySearch profile address: familysearch.org/tree/person/details/<b>ID</b>. You can paste the whole address.</small></label>
+   <div class="two">
+   <label>Sex<select id="ed-sex"><option value="M"${sex==='M'?' selected':''}>Male</option><option value="F"${sex==='F'?' selected':''}>Female</option><option value="U"${sex==='U'?' selected':''}>Unknown</option></select></label></div>
+   ${famPick}
+   <div class="two"><label>Birth date<input id="ed-bdate" value="${esc(b.date||'')}" placeholder="3 APR 1949, ABT 1913"></label><label>Birth place<input id="ed-bplace" value="${esc(b.place||'')}"></label></div>
+   <div class="two"><label>Death date<input id="ed-ddate" value="${esc(d.date||'')}" placeholder="21 MAY 2014"></label><label>Death place<input id="ed-dplace" value="${esc(d.place||'')}"></label></div>
+   <label>Cause of death<input id="ed-dcause" value="${esc(p&&p.ev.DEAT&&p.ev.DEAT.cause||'')}" placeholder="e.g. cholera" autocomplete="off"><small class="fh">As written in the death or burial record</small></label>
+   <label>Notes<textarea id="ed-note" rows="4">${esc(p?p.notes.join('\n\n'):'')}</textarea></label>
+   <div class="acts"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-back="${o.mode==='edit'?o.id:o.anchor}">Cancel</button>
+   ${o.mode==='edit'?`<button class="btn danger" type="button" data-del="${o.id}">Delete person</button>`:''}</div>
+   ${o.mode==='edit'?marrSection(o.id):''}
+   ${o.mode==='edit'?relSection(o.id):''}
+   ${o.mode==='edit'?`<div class="exist"><label>Same person entered twice? Find the other copy<input id="ed-merge" type="search" placeholder="Search by name" autocomplete="off"></label><div class="results" id="ed-mres" hidden></div></div><div id="ed-mpick" class="hint" hidden></div>`:''}
+   <p class="hint">Dates use GEDCOM style: 3 APR 1949, ABT 1913, BEF 1900.</p>
+  </form>`;
+  sheet.hidden=false;sheet.scrollTop=0;
+  document.getElementById('edform').onsubmit=ev=>{ev.preventDefault();submitForm(o)};
+  const mx=document.getElementById('ed-merge');
+  if(mx){const rs=document.getElementById('ed-mres'),mp=document.getElementById('ed-mpick');
+    mx.addEventListener('input',()=>{const t=nrm(mx.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
+      const hits=Object.values(P).filter(p=>p.id!==o.id&&canEditP(p.id)&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-mpick="${esc(p.id)}">${esc(plateName(p))} <small>${years(p)} · ${esc(rel(p))}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+    rs.addEventListener('click',e=>{const b=e.target.closest('button[data-mpick]');if(!b)return;e.stopPropagation();rs.hidden=true;const other=b.dataset.mpick;
+      const nm=id=>`<strong>${esc(plateName(P[id]))}</strong> ${years(P[id])} <small>(${esc(rel(P[id]))})</small>`;
+      mp.innerHTML=`Merge these two into one person? Names, dates, places, notes, relatives and files are combined. Where they disagree, the one you keep wins and the other goes into the notes. Admins can undo it from History.<br>1. ${nm(o.id)}<br>2. ${nm(other)}
+        <div class="acts"><button class="btn primary" type="button" data-mk="${esc(o.id)}|${esc(other)}">Merge, prefer 1</button><button class="btn" type="button" data-mk="${esc(other)}|${esc(o.id)}">Merge, prefer 2</button></div>`;mp.hidden=false;
+      mp.querySelectorAll('[data-mk]').forEach(x=>x.onclick=async ev=>{ev.stopPropagation();const[k,d]=x.dataset.mk.split('|');mp.querySelectorAll('button').forEach(y=>y.disabled=true);x.textContent='Merging…';
+        mergeInto(k,d);rebuild();await flush();setFocus(k);openSheet(k)})})}
+  const ex=document.getElementById('ed-exist');
+  if(ex){const rs=document.getElementById('ed-exres'),form=document.getElementById('edform');
+    const newBits=()=>[...form.querySelectorAll('.two')].concat([document.getElementById('ed-note').closest('label'),document.getElementById('ed-or')]);
+    ex.addEventListener('input',()=>{const t=nrm(ex.value);if(!t){rs.hidden=true;return}const w=t.split(' ');
+      const hits=Object.values(P).filter(p=>p.id!==o.anchor&&w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,20);
+      rs.innerHTML=hits.length?hits.map(p=>`<button type="button" data-pick="${esc(p.id)}">${esc(plateName(p))} <small>${years(p)} · ${esc(p.src)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';rs.hidden=false});
+    rs.addEventListener('click',e=>{const b=e.target.closest('button[data-pick]');if(!b)return;e.stopPropagation();o.existing=b.dataset.pick;rs.hidden=true;ex.closest('.exist').hidden=true;
+      const ch=document.getElementById('ed-chosen');ch.innerHTML=`Linking <strong>${esc(plateName(P[o.existing]))}</strong> ${years(P[o.existing])} <button class="btn" type="button" id="ed-unpick">Change</button>`;ch.hidden=false;
+      newBits().forEach(x=>x.hidden=true);
+      document.getElementById('ed-unpick').onclick=ev=>{ev.stopPropagation();o.existing=null;ch.hidden=true;ex.closest('.exist').hidden=false;ex.value='';newBits().forEach(x=>x.hidden=false)}})}
+}
+function readForm(){const v=i=>document.getElementById(i).value.trim();
+  const g=v('ed-given'),m=v('ed-middle'),s=v('ed-surname'),x=v('ed-suffix');
+  return{name:`${g}${m?' '+m:''} /${s}/${x?' '+x:''}`.trim(),middle:m,maiden:v('ed-maiden'),nick:v('ed-nick'),fsid:fsNorm(v('ed-fsid')),sex:v('ed-sex'),birthDate:v('ed-bdate').toUpperCase(),birthPlace:v('ed-bplace'),deathDate:v('ed-ddate').toUpperCase(),deathPlace:v('ed-dplace'),deathCause:v('ed-dcause'),note:document.getElementById('ed-note').value.trim()}}
+function famData(f){return{id:f.id,husb:f.husb||null,wife:f.wife||null,chil:f.chil.slice(),marrDate:(f.ev.MARR||{}).date||'',marrPlace:(f.ev.MARR||{}).place||''}}
+const writes=[];
+function queue(coll,id,data){if(coll==='people'&&data&&!data.deleted&&data.notSame===undefined&&P[id]&&P[id].notSame&&P[id].notSame.length)data.notSame=P[id].notSame.slice();if(coll==='people'&&data&&!data.deleted&&data.srcId===undefined&&P[id]&&P[id].srcId)data.srcId=P[id].srcId;OV_P;(coll==='people'?OV_P:OV_F)[id]=data;writes.push([coll,id,data])}
+async function flush(){status('Saving…');{const last={};writes.forEach((w,i)=>last[w[0]+'|'+w[1]]=i);const keep=writes.filter((w,i)=>last[w[0]+'|'+w[1]]===i);writes.length=0;writes.push(...keep)}
+  try{if(db.bulk&&writes.length>3){const now=new Date().toISOString();await db.bulk(writes.splice(0).map(([c,id,data])=>({coll:c,id:keyOf(id),data:Object.assign({},data,{id,updatedAt:now})})))}
+  while(writes.length){const[c,id,data]=writes.shift();await db.collection(c).doc(keyOf(id)).set(Object.assign({},data,{id,updatedAt:new Date().toISOString()}))}status('Saved')}
+  catch(e){status('Not saved: '+(e&&e.code==='not_granted'?'you can view but not edit this tree':(e&&e.message)||'error'),true)}}
+function submitForm(o){if(!canEditP(o.mode==='edit'?o.id:o.anchor)){status('Another family admin manages this person',true);return}const data=o.existing?null:readForm();if(data&&!data.name.replace(/[\s/]/g,'')){status('Add a name first',true);return}
+  let pid=o.id;
+  if(o.mode==='edit'){queue('people',pid,data);
+    document.querySelectorAll('[data-mdate]').forEach(inp=>{const fid=inp.dataset.mdate,f0=F[fid];if(!f0)return;const pl=document.querySelector(`[data-mplace="${CSS.escape(fid)}"]`);
+      const m=f0.ev.MARR||{},d=inp.value.trim().toUpperCase().replace(/^ABOUT\b/,'ABT').replace(/^BEFORE\b/,'BEF').replace(/^AFTER\b/,'AFT'),plc=pl?pl.value.trim():'';
+      if(nrm(d)===nrm(m.date||'')&&plc===(m.place||''))return;const f=JSON.parse(JSON.stringify(f0));f.ev.MARR={date:d,place:plc};queue('families',fid,famData(f))})}
+  else{const a=o.anchor,as=P[a].sex;
+    if(o.existing){pid=o.existing;
+      const already=(o.rel==='spouse'&&famsOf(a).some(f=>spouseIn(f,a)===pid))||(o.rel==='child'&&famsOf(a).some(f=>f.chil.includes(pid)))||((o.rel==='father'||o.rel==='mother'||o.rel==='sibling')&&parentsOf(a)&&[parentsOf(a).husb,parentsOf(a).wife].concat(parentsOf(a).chil).includes(pid));
+      if(already){status('They are already linked',true);return}}
+    else{pid='N:@I'+uid()+'@';if(limited())window.__PERM.editable.add(pid);queue('people',pid,data)}
+    const psex=data?data.sex:P[pid].sex;
+    const newFam=()=>({id:'N:@F'+uid()+'@',husb:null,wife:null,chil:[],ev:{}});
+    if(o.rel==='father'||o.rel==='mother'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f[o.rel==='father'?'husb':'wife']=pid;queue('families',f.id,famData(f))}
+    else if(o.rel==='spouse'){const f=newFam();const meHusb=as==='M'||(as!=='F'&&psex!=='M');f.husb=meHusb?a:pid;f.wife=meHusb?pid:a;queue('families',f.id,famData(f))}
+    else if(o.rel==='child'){const sel=document.getElementById('ed-fam').value;let f=sel!=='new'&&F[sel]?JSON.parse(JSON.stringify(F[sel])):Object.assign(newFam(),as==='F'?{wife:a}:{husb:a});f.chil.push(pid);queue('families',f.id,famData(f))}
+    else if(o.rel==='sibling'){let f=parentsOf(a);f=f?JSON.parse(JSON.stringify(f)):Object.assign(newFam(),{chil:[a]});f.chil.push(pid);queue('families',f.id,famData(f))}
+  }
+  rebuild();render(true);openSheet(pid);flush()}
+// ---------- remove a relationship (wrong parent, spouse or child link) ----------
+function marrSection(id){const p=P[id];if(!p)return'';const fs=p.fams.map(x=>F[x]).filter(f=>f&&spouseIn(f,id));if(!fs.length)return'';
+  return`<h3 class="sect">Marriage</h3>${fs.map(f=>{const m=f.ev.MARR||{};return`<div class="mar"><div class="sub">With ${esc(plateName(P[spouseIn(f,id)]))}</div>
+   <div class="two"><label>Date<input data-mdate="${esc(f.id)}" value="${esc(fmtDate(m.date||''))}" placeholder="e.g. 13 May 1911" autocomplete="off"></label><label>Place<input data-mplace="${esc(f.id)}" value="${esc(m.place||'')}" autocomplete="off"></label></div></div>`}).join('')}`}
+function relSection(id){const p=P[id];if(!p)return'';const nm=x=>esc(plateName(P[x]));const rows=[];
+  p.famc.forEach(fid=>{const f=F[fid];if(!f)return;const ps=[f.husb,f.wife].filter(Boolean);rows.push([`Child of ${ps.length?ps.map(nm).join(' & '):'unknown parents'}`,`c|${fid}|${id}`])});
+  p.fams.forEach(fid=>{const f=F[fid];if(!f)return;const sp=spouseIn(f,id);if(sp)rows.push([`Spouse: ${nm(sp)}`,`s|${fid}|${sp}`]);f.chil.forEach(k=>rows.push([`Child: ${nm(k)}`,`k|${fid}|${k}`]))});
+  if(!rows.length)return'';
+  return`<h3 class="sect">Relationships</h3><p class="hint">Remove a link that is wrong. The people stay in the tree; only the link is removed.</p>
+   ${rows.map(([t,k])=>`<div class="relrow"><span>${t}</span><button class="btn danger" type="button" data-unlink="${esc(k)}">Remove</button></div>`).join('')}`}
+function unlink(kind,fid,pid,self){const f0=F[fid];if(!f0)return;const f=JSON.parse(JSON.stringify(f0));
+  if(kind==='s'){if(f.husb===pid)f.husb=null;else if(f.wife===pid)f.wife=null}else f.chil=f.chil.filter(x=>x!==pid);
+  const empty=!f.chil.length&&[f.husb,f.wife].filter(Boolean).length<2;
+  queue('families',fid,empty?Object.assign(famData(f),{deleted:true}):famData(f));
+  rebuild();render(true);openForm({mode:'edit',id:self});flush()}
+function deletePerson(id){if(!canEditP(id))return;queue('people',id,Object.assign({},OV_P[id]||{},{deleted:true}));
+  const next=parentsOf(id)?(parentsOf(id).husb||parentsOf(id).wife):(famsOf(id).map(f=>spouseIn(f,id)).find(Boolean)||homeId());
+  rebuild();if(id===focusId)focusId=next&&P[next]?next:homeId();render(false);openSheet(focusId);flush()}
+
+// ---------- documents & photos ----------
+const MEDIA={};let assets=null,pickFor=null;
+const mediaOf=pid=>Object.values(MEDIA).filter(m=>m.person===pid).sort((a,b)=>(a.addedAt||'').localeCompare(b.addedAt||''));
+const isImg=m=>/^image\//.test(m.contentType||'');
+const profileOf=pid=>mediaOf(pid).find(m=>m.profile&&isImg(m))||null;
+let pickProfile=false;
+function filesSection(id){const ms=mediaOf(id);if(!ms.length&&!assets)return'';
+  return`<div class="files"><h3>Documents and photos${ms.length?' ('+ms.length+')':''}</h3>
+  ${ms.length?`<div class="thumbs">${ms.map(m=>`<button type="button" class="thumb" data-media="${esc(m.key)}">${isImg(m)?`<img src="${esc(m.url)}" alt="" loading="lazy">`:`<span class="doc">${esc(((m.name||'').split('.').pop()||'FILE').toUpperCase().slice(0,4))}</span>`}<span class="cap">${esc(m.caption||m.name||'File')}</span></button>`).join('')}</div>`:''}
+  ${assets&&canEditP(id)?`<div class="acts"><button class="btn" type="button" data-attach="${id}">Attach photo or document</button><button class="btn" type="button" data-profpick="${id}">${profileOf(id)?'Change profile photo':'Add profile photo'}</button></div><p class="hint" id="upmsg">Photos, scans and PDFs up to 20 MB.</p>`:''}</div>`}
+async function shrink(file){ // keep phone photos small enough to load fast; documents stay readable at 2400px
+  if(!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)||file.size<2.5e6)return file;
+  try{const bmp=await createImageBitmap(file);const k=Math.min(1,2400/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));return b||file}catch(e){return file}}
+document.getElementById('filepick').addEventListener('change',async e=>{const files=[...e.target.files];e.target.value='';const pid=pickFor;if(!files.length||!pid||!assets||!db)return;
+  const msg=t=>{const m=document.getElementById('upmsg');if(m)m.textContent=t};let done=0;
+  for(const f of files){msg(`Uploading ${done+1} of ${files.length}…`);status('Uploading…');
+    try{const blob=await shrink(f);const r=await assets.upload(blob);const key='M-'+r.id;
+      const doc={id:key,key,asset:r.id,url:r.url,contentType:r.contentType,name:f.name,caption:pickProfile?'Profile photo':f.name.replace(/\.[^.]+$/,''),person:pid,addedAt:new Date().toISOString()};
+      if(pickProfile&&/^image\//.test(r.contentType||'')){doc.profile=true;for(const x of mediaOf(pid))if(x.profile){x.profile=false;await db.collection('media').doc(x.key).set(x)}}
+      MEDIA[key]=doc;await db.collection('media').doc(key).set(doc);done++}
+    catch(err){const c=err&&err.code;msg(c==='unsupported_type'?`${f.name}: this file type can't be attached. Use a photo, scan or PDF.`:c==='too_large'?`${f.name} is over 20 MB.`:c==='quota_or_state'?'Storage is full.':`${f.name} didn't upload (${c||'error'}).`);status('Upload failed',true)}}
+  if(done){status('Saved');render(true);if(selId===pid&&!document.getElementById('edform'))openSheet(pid)}});
+const lb=document.getElementById('lb');
+function openLb(key){const m=MEDIA[key];if(!m)return;const p=P[m.person];
+  lb.innerHTML=`<div class="bar"><strong>${esc(p?plateName(p):'')}</strong><span style="flex:1"></span><button class="btn" type="button" data-lbclose>Close</button></div>
+   <div class="view">${isImg(m)?`<img src="${esc(m.url)}" alt="${esc(m.caption||'')}">`:`<p>${esc(m.name||'Document')}</p>`}</div>
+   <div class="bar"><input id="lb-cap" value="${esc(m.caption||'')}" aria-label="Caption" ${canEditP(m.person)?'':'readonly'}>
+   ${canEditP(m.person)?'<button class="btn" type="button" data-lbsave>Save caption</button>':''}
+   <a class="btn" href="${esc(m.url)}" target="_blank" rel="noopener">Open original</a>
+   ${canEditP(m.person)&&isImg(m)?`<button class="btn" type="button" data-lbprof>${m.profile?'Profile photo ✓':'Use as profile photo'}</button>`:''}
+   ${canEditP(m.person)?'<button class="btn danger" type="button" data-lbdel>Remove</button>':''}</div>`;
+  lb.dataset.key=key;lb.hidden=false}
+lb.addEventListener('click',async e=>{const t=e.target.closest('button');if(!t)return;const key=lb.dataset.key,m=MEDIA[key];
+  if(t.dataset.lbclose!=null){lb.hidden=true;return}
+  if(t.dataset.lbprof!=null&&m){const on=!m.profile;t.disabled=true;
+    try{for(const x of mediaOf(m.person)){const want=x.key===key?on:false;if(!!x.profile!==want){x.profile=want;await db.collection('media').doc(x.key).set(x)}}
+      t.textContent=on?'Profile photo ✓':'Use as profile photo';render(true);if(selId)openSheet(selId)}catch(err){t.textContent='Not saved'}t.disabled=false;return}
+  if(t.dataset.lbsave!=null&&m){m.caption=document.getElementById('lb-cap').value.trim();t.textContent='Saving…';
+    try{await db.collection('media').doc(key).set(m);t.textContent='Saved'}catch(err){t.textContent='Not saved'}return}
+  if(t.dataset.lbdel!=null&&m){if(!t.dataset.armed){t.dataset.armed='1';t.textContent='Tap again to remove';return}
+    try{await db.collection('media').doc(key).delete();delete MEDIA[key];if(assets&&m.asset)assets.delete(m.asset).catch(()=>{});lb.hidden=true;render(true);if(selId)openSheet(selId)}catch(err){t.textContent='Could not remove'}}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden)lb.hidden=true});
+
+// ---------- export ----------
+function toGed(){const im={},fm={};let i=0,j=0;Object.keys(P).forEach(k=>im[k]='@I'+(++i)+'@');Object.keys(F).forEach(k=>fm[k]='@F'+(++j)+'@');
+  const L=['0 HEAD','1 SOUR InfiniteFamilyTree','1 GEDC','2 VERS 5.5.1','2 FORM LINEAGE-LINKED','1 CHAR UTF-8','1 DATE '+new Date().toUTCString().slice(5,16).toUpperCase()];
+  const ev=(t,e)=>{if(!e)return;L.push('1 '+t);if(e.date)L.push('2 DATE '+e.date);if(e.place)L.push('2 PLAC '+e.place);if(e.cause)L.push('2 CAUS '+e.cause)};
+  Object.values(P).forEach(p=>{const pn=p.maiden?(()=>{const q=nameParts(p);return `${q.given} ${p.maiden} /${q.surname}/${q.suffix?' '+q.suffix:''}`})():p.name;L.push(`0 ${im[p.id]} INDI`,'1 NAME '+(pn||'Unknown'));{const n=splitName(p.name),pm=splitName(pn);if(pm.given)L.push('2 GIVN '+pm.given);if(pm.surname)L.push('2 SURN '+pm.surname);if(n.suffix)L.push('2 NSFX '+n.suffix);if(p.nick)L.push('2 NICK '+p.nick);
+      if(p.maiden)L.push(`1 NAME ${n.given} /${p.maiden}/`,'2 TYPE birth')}L.push('1 SEX '+(p.sex||'U'));if(p.fsid)L.push('1 _FSFTID '+p.fsid);['BIRT','CHR','BAPM','DEAT','BURI'].forEach(t=>ev(t,p.ev[t]));
+    p.notes.forEach(n=>{const ls=n.split('\n');L.push('1 NOTE '+ls[0]);ls.slice(1).forEach(x=>L.push('2 CONT '+x))});
+    mediaOf(p.id).forEach(m=>{L.push('1 OBJE','2 FILE '+new URL(m.url,location.href).href);if(m.caption)L.push('2 TITL '+m.caption)});
+    p.famc.forEach(f=>fm[f]&&L.push('1 FAMC '+fm[f]));p.fams.forEach(f=>fm[f]&&L.push('1 FAMS '+fm[f]))});
+  Object.values(F).forEach(f=>{L.push(`0 ${fm[f.id]} FAM`);if(f.husb)L.push('1 HUSB '+im[f.husb]);if(f.wife)L.push('1 WIFE '+im[f.wife]);f.chil.forEach(c=>L.push('1 CHIL '+im[c]));ev('MARR',f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?f.ev.MARR:null)});
+  L.push('0 TRLR');return L.join('\n')+'\n'}
+let downloads=null;
+function openExport(){selId=null;sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button><h2>GEDCOM</h2>
+  <h3 class="sect">Export</h3>
+  <p class="sub">${Object.keys(P).length} people and ${Object.keys(F).length} families, including edits made here.</p>
+  <div class="acts">${downloads?'<button class="btn primary" type="button" id="ex-save">Save .ged file</button>':''}<button class="btn" type="button" id="ex-copy">Copy GEDCOM text</button></div>
+  <p class="hint" id="ex-msg"></p><textarea id="ex-text" rows="6" readonly hidden></textarea>
+  ${canEdit()?`${limited()?'':`<h3 class="sect">Import</h3><p class="sub">Add people from a .ged file, such as an export from Geni or Ancestry. People already in the tree (same name and birth year) are matched, not duplicated, and their missing dates and places are filled in.</p>
+  <div class="acts"><button class="btn" type="button" id="im-pick">Choose .ged file</button></div><div id="im-plan"></div>`}
+  <h3 class="sect">Duplicates</h3><p class="sub">Find people who appear twice (same name and birth year) and merge them into one.</p>
+  <div class="acts"><button class="btn" type="button" id="dup-find">Find duplicates</button><button class="btn" type="button" id="clean-find">Check and clean up</button></div><div id="dup-list"></div>`:''}`;sheet.hidden=false;
+  const df=document.getElementById('dup-find');if(df)df.onclick=showDups;const cf=document.getElementById('clean-find');if(cf)cf.onclick=showClean;
+  const ip=document.getElementById('im-pick');if(ip)ip.onclick=()=>document.getElementById('gedpick').click();
+  const msg=t=>document.getElementById('ex-msg').textContent=t;
+  const sv=document.getElementById('ex-save');if(sv)sv.onclick=async()=>{const g=toGed();
+    try{await downloads.save({filename:'infinite-family-tree.ged',data:g});msg('Saved.')}
+    catch(e){if(e&&e.code==='rejected_extension'){try{await downloads.save({filename:'infinite-family-tree.ged.txt',data:g});msg('Saved as .ged.txt. Remove the .txt ending before importing.')}catch(e2){msg(e2&&e2.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}}
+      else msg(e&&e.code==='declined'?'Save cancelled.':'Could not save here. Use Copy instead.')}};
+  document.getElementById('ex-copy').onclick=()=>{const g=toGed(),ta=document.getElementById('ex-text');ta.value=g;
+    navigator.clipboard.writeText(g).then(()=>msg('Copied. Paste into a text file named .ged.')).catch(()=>{ta.hidden=false;ta.select();msg('Select all and copy the text below.')})}}
+document.getElementById('export').onclick=openExport;
+
+// ---------- duplicates ----------
+function findDups(){ // same person entered twice: first and last name match, the shorter name fits inside the longer, birth years agree or one is blank
+  // sound-alike spelling: Vasquez/Vazquez/Basques, Ysidro/Isidro, Bregida/Brigida
+  const ph=w=>w.replace(/qu/g,'k').replace(/c(?=[ei])/g,'s').replace(/c/g,'k').replace(/z/g,'s').replace(/v/g,'b').replace(/y/g,'i').replace(/h/g,'').replace(/(.)\1+/g,'$1').replace(/e/g,'i').replace(/o(?=$)/,'u').replace(/s$/,'')||w;
+  const PN=n=>nrm(niceName(n)).split(' ').filter(Boolean).map(ph).join(' ');
+  const W=p=>PN(p.name).split(' ').filter(Boolean);const g={};
+  Object.values(P).forEach(p=>{const w=W(p);if(w.length<2||w.includes('unknown'))return;const k=w[0]+'|'+w[w.length-1];(g[k]=g[k]||[]).push(p)});
+  const pre=p=>p.id.split(':')[0];
+  const parNames=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean).map(x=>PN(P[x].name)).sort().join('+'):''};
+  const sps=p=>famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean);
+  const kin=p=>{const f=parentsOf(p.id);return new Set([...(f?[f.husb,f.wife]:[]),...sps(p),...famsOf(p.id).flatMap(x=>x.chil)].filter(Boolean))};
+  const spN=p=>new Set(sps(p).map(x=>PN(P[x].name)));
+  const fits=(x,y)=>{const a=W(x),b=W(y);const[s,l]=a.length<=b.length?[a,b]:[b,a];return s.every(w=>l.includes(w))};
+  const parFit=(x,y)=>{const a=parNames(x),b=parNames(y);if(!a||!b||a===b)return true;const fx=parentsOf(x.id),fy=parentsOf(y.id);return fx===fy};
+  const parIds=p=>{const f=parentsOf(p.id);return f?[f.husb,f.wife].filter(Boolean):[]};
+  const kidIds=p=>famsOf(p.id).flatMap(x=>x.chil);
+  // strong evidence: same name and they share a parent, a spouse or a child (the same record imported twice)
+  const shares=(x,y)=>parIds(x).some(z=>parIds(y).includes(z))||sps(x).some(z=>sps(y).includes(z))||kidIds(x).some(z=>kidIds(y).includes(z));
+  const strong=(x,y)=>fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&shares(x,y)&&!kin(x).has(y.id)&&!kin(y).has(x.id);
+  const sexOk=(x,y)=>!(x.sex&&y.sex&&x.sex!=='U'&&y.sex!=='U'&&x.sex!==y.sex);
+  const same=(x,y)=>sexOk(x,y)&&(strong(x,y)||!(pre(x)===pre(y)&&(pre(x)==='S'||pre(x)==='A'))&&fits(x,y)&&!(by(x)&&by(y)&&by(x)!==by(y))&&parFit(x,y)
+    &&!kin(x).has(y.id)&&!kin(y).has(x.id)
+    &&!(spN(x).size&&spN(y).size&&![...spN(x)].some(n=>spN(y).has(n)))
+    &&!crossed(x,y)&&!crossed(y,x)&&!wedKin(x,y)&&!wedKin(y,x));
+  // y is married to x's brother, uncle, parent or grandparent: two different people with the same name
+  function wedKin(x,y){const up1=parIds(x),up2=up1.flatMap(z=>parIds(P[z]||{id:''}));const near=new Set([...up1,...up2]);
+    [...up1,...up2].forEach(z=>famsOf(z).forEach(f=>f.chil.forEach(c=>near.add(c))));near.delete(x.id);return sps(y).some(z=>near.has(z))}
+  function crossed(x,y){const f=parentsOf(x.id);if(!f)return false;const s=new Set(sps(y));return [f.husb,f.wife].some(z=>z&&s.has(z))}
+  const score=p=>(p.id.startsWith('N:')?0:10)+(by(p)?2:0)+W(p).length;
+  const dy=q=>+((deathOf(q).date||'').match(/\d{4}/)||[0])[0];const apart=(x,y)=>(x.notSame||[]).includes(y.id)||(y.notSame||[]).includes(x.id)||(dy(x)&&dy(y)&&Math.abs(dy(x)-dy(y))>2);
+  const out=[];Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>score(y)-score(x));
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(!apart(a[i],a[j])&&same(a[i],a[j])&&canEditP(a[i].id)&&canEditP(a[j].id))out.push([a[i],a[j]])});
+  const seenPair=new Set(out.map(([a,b])=>[a.id,b.id].sort().join('|')));
+  Object.values(P).forEach(sp=>{const ws=sps(sp).map(id=>P[id]).filter(Boolean);
+    for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){let a=ws[i],b=ws[j];const k=[a.id,b.id].sort().join('|');if(seenPair.has(k)||a.id===b.id)continue;
+      if(W(a)[0]!==W(b)[0]||apart(a,b)||!sexOk(a,b)||(by(a)&&by(b)&&by(a)!==by(b)))continue;
+      if(score(b)>score(a))[a,b]=[b,a];if(canEditP(a.id)&&canEditP(b.id)){seenPair.add(k);out.push([a,b])}}});
+  return out}
+function rel(p){const pf=parentsOf(p.id);const par=pf?[pf.husb,pf.wife].filter(Boolean).map(x=>niceName(P[x].name)):[];
+  const sp=famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(Boolean).map(x=>niceName(P[x].name));
+  return [par.length?'child of '+par.join(' & '):'',sp.length?'married to '+sp.join(', '):''].filter(Boolean).join('; ')||'no relatives linked'}
+function showDups(){const box=document.getElementById('dup-list');const cps=auditData().copies;const ds=findDups();
+  const cpHtml=cps.length?`<div class="dup"><strong>${cps.length} exact cop${cps.length>1?'ies':'y'} found</strong><small>Same name, sex, dates and parents, usually from a research update applied twice. Join them first; the list below then gets shorter.</small><div class="acts"><button class="btn primary" type="button" id="cp-all">Join ${cps.length} exact cop${cps.length>1?'ies':'y'}</button></div></div>`:'';
+  const wire=()=>{const b=document.getElementById('cp-all');if(b)b.onclick=async()=>{b.disabled=true;b.textContent='Joining…';cps.forEach(c=>c.fix());rebuild();render(true);await flush();showDups();box.insertAdjacentHTML('afterbegin',`<p class="sub"><strong>Joined ${cps.length} exact cop${cps.length>1?'ies':'y'}.</strong></p>`)}};
+  if(!ds.length){box.innerHTML=cpHtml+'<p class="sub">No other duplicates found.</p>';wire();return}
+  box.innerHTML=cpHtml+`<p class="sub">${ds.length} possible duplicate${ds.length>1?'s':''}. Check each pair is really the same person first. Merge combines each pair into one person: names, dates, places, notes, relatives and files. Where the two disagree, the first one's value is kept and the other is added to the notes. Admins can undo a merge from History.</p>${ds.length>1?'<div class="acts"><button class="btn" type="button" id="dup-all">Merge all '+ds.length+'</button></div>':''}`+
+   ds.map(a=>`<div class="dup">${a.map((p,i)=>`<div><strong>${i?'Merge in':'Keep'}:</strong> ${esc(plateName(p))} <small>${years(p)} · ${esc(p.src)} · ${esc(rel(p))}</small></div>`).join('')}
+    <div class="acts"><button class="btn" type="button" data-merge="${esc(a.map(p=>p.id).join('|'))}">Merge</button><button class="btn" type="button" data-show="${esc(a[0].id)}">View</button><button class="btn" type="button" data-apart="${esc(a.map(p=>p.id).join('|'))}">Not the same person</button></div></div>`).join('');
+  box.querySelectorAll('[data-merge]').forEach(b=>b.onclick=async()=>{const ids=b.dataset.merge.split('|');b.disabled=true;b.textContent='Merging…';
+    ids.slice(1).forEach(d=>mergeInto(ids[0],d));rebuild();render(true);await flush();showDups()});
+  const all=document.getElementById('dup-all');if(all)all.onclick=async()=>{if(!all.dataset.armed){all.dataset.armed='1';all.textContent='Tap again to merge all '+ds.length;return}
+    all.disabled=true;all.textContent='Merging…';ds.forEach(([k,d])=>{if(P[k.id]&&P[d.id]){mergeInto(k.id,d.id);rebuild()}});render(true);await flush();showDups()};
+  wire();box.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{setFocus(b.dataset.show)});
+  box.querySelectorAll('[data-apart]').forEach(b=>b.onclick=async()=>{const[x,y]=b.dataset.apart.split('|');b.disabled=true;
+    [[x,y],[y,x]].forEach(([a,o])=>{const p=P[a];if(!p)return;const d=Object.assign({},OV_P[a]||personDoc(p));d.notSame=[...new Set([...(p.notSame||[]),o])];queue('people',a,d)});
+    rebuild();await flush();showDups()})}
+
+// ---------- clean-up check: problems in the stored data, each fixed only after the admin ticks it ----------
+function rawFam(id){const o=OV_F[id];if(o)return o.deleted?null:{id,husb:o.husb||null,wife:o.wife||null,chil:(o.chil||[]).slice(),ev:(o.marrDate||o.marrPlace)?{MARR:{date:o.marrDate||'',place:o.marrPlace||''}}:{}};
+  const b=BASE_F[id];return b?JSON.parse(JSON.stringify(b)):null}
+function auditData(){const fams=Object.keys(Object.assign({},BASE_F,OV_F)).map(rawFam).filter(Boolean).map(f=>Object.assign(f,{husb:P[f.husb]?f.husb:null,wife:P[f.wife]?f.wife:null,chil:f.chil.filter(c=>P[c])}));
+  const nm=id=>id&&P[id]?niceName(P[id].name):'?';const can=f=>[f.husb,f.wife,...f.chil].filter(Boolean).some(canEditP);
+  const out={couple:[],twice:[],empty:[],alone:[]};
+  // 1. the same couple stored as two or more families
+  const byCouple={};fams.forEach(f=>{if(f.husb&&f.wife){const k=[f.husb,f.wife].sort().join('|');(byCouple[k]=byCouple[k]||[]).push(f)}});
+  Object.values(byCouple).forEach(a=>{if(a.length>1&&can(a[0])){a.sort((x,y)=>(y.chil.length+(y.ev.MARR?1:0))-(x.chil.length+(x.ev.MARR?1:0)));
+    out.couple.push({label:nm(a[0].husb)+' + '+nm(a[0].wife)+': stored '+a.length+' times',fix:()=>{const k=a[0],ch=[...new Set(a.flatMap(f=>f.chil))],m=a.map(f=>f.ev.MARR).filter(Boolean)[0];
+      queue('families',k.id,famData({id:k.id,husb:k.husb,wife:k.wife,chil:ch,ev:m?{MARR:m}:{}}));a.slice(1).forEach(f=>queue('families',f.id,Object.assign(famData(f),{deleted:true})))}})}});
+  const dupCouple=new Set(Object.values(byCouple).filter(a=>a.length>1).flat().map(f=>f.id));
+  // 2. a child listed twice, or under a family that has only part of the parents of another family that also lists them
+  fams.forEach(f=>{if(dupCouple.has(f.id))return;const seen=new Set();const rep=f.chil.filter(c=>{if(seen.has(c))return true;seen.add(c);return false});
+    const pa=[f.husb,f.wife].filter(Boolean);
+    const extra=[...seen].filter(c=>fams.some(g=>g!==f&&g.chil.includes(c)&&pa.every(x=>[g.husb,g.wife].includes(x))&&[g.husb,g.wife].filter(Boolean).length>pa.length));
+    const drop=[...new Set(rep.concat(extra))];if(!drop.length||!can(f))return;
+    out.twice.push({label:drop.map(nm).join(', ')+(extra.length?' also listed under '+(pa.length?'only '+pa.map(nm).join(' + '):'a family with no parents'):' listed twice under '+pa.map(nm).join(' + ')),
+      fix:()=>{const c=[...new Set(f.chil.filter(x=>!extra.includes(x)))];const ff=Object.assign({},f,{chil:c});
+        queue('families',f.id,[f.husb,f.wife,...c].filter(Boolean).length<2?Object.assign(famData(ff),{deleted:true}):famData(ff))}})});
+  // 3. families with fewer than two people
+  fams.forEach(f=>{const m=[f.husb,f.wife,...f.chil].filter(Boolean);if(m.length>=2)return;if(m.length&&!can(f))return;
+    out.empty.push({label:m.length?'A family link with only '+nm(m[0])+' in it':'An empty family link',fix:()=>queue('families',f.id,Object.assign(famData(f),{deleted:true}))})});
+  // 4. people linked to nobody
+  Object.values(P).forEach(p=>{if(p.famc.length||p.fams.length||!canEditP(p.id))return;const blank=!birthOf(p).date&&!deathOf(p).date&&!p.notes.length&&!mediaOf(p.id).length;
+    out.alone.push({label:niceName(p.name)+(years(p)?' ('+years(p)+')':'')+' · '+p.src+(blank?' · no details':''),pre:/^unknown$/i.test(niceName(p.name))&&blank,id:p.id,fix:()=>queue('people',p.id,Object.assign({},OV_P[p.id]||{},{deleted:true}))})});
+  // 5. names typed in lower case or ALL CAPS, and notes typed into the name
+  const PART=/^(de|del|dela|los|las|la|y|van|von|da|di)$/i,ROM=/^(ii|iii|iv|v|vi|jr\.?|sr\.?)$/i;
+  const tc=w=>w.split('-').map(x=>{if(!x)return x;if(ROM.test(x))return /^j|^s/i.test(x)?x[0].toUpperCase()+x.slice(1).toLowerCase():x.toUpperCase();
+    return x.charAt(0).toUpperCase()+x.slice(1).toLowerCase()}).join('-');
+  const fixName=n=>{let i=0;return n.replace(/[^\s/]+/g,w=>{const first=i++===0;if(!first&&PART.test(w)&&w===w.toLowerCase())return w;
+    return w.split('-').map(x=>{const letters=x.replace(/[^A-Za-zÀ-ÿ]/g,'');if(letters.length<2||ROM.test(x)&&x===x.toUpperCase())return x;
+      if(x===x.toLowerCase()||(x===x.toUpperCase()&&letters.length>=3))return tc(x);return x}).join('-')})};
+  out.caps=[];Object.values(P).forEach(p=>{if(!canEditP(p.id))return;const paren=(p.name.match(/\s*\(([^)]*)\)\s*/)||[]);let n=p.name;const extra=[];
+    if(paren[0]){n=n.replace(paren[0],' ').replace(/\s+/g,' ').trim();extra.push(paren[1])}
+    const n2=fixName(n);if(n2===p.name)return;
+    out.caps.push({label:niceName(p.name)+' → '+niceName(n2)+(extra.length?' (moves “'+extra[0]+'” to notes)':''),fix:()=>{const o=Object.assign({},OV_P[p.id]||personDoc(p));o.name=n2;
+      if(extra.length)o.note=[o.note||'',...extra.map(x=>x.charAt(0).toUpperCase()+x.slice(1)+'.')].filter(Boolean).join('\n\n');queue('people',p.id,o)}})});
+  // 0. exact copies: same full name, sex, birth and death, and same parents (by name); usually one research update applied twice
+  out.copies=[];{const pn=p=>[...new Set(p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+    const g={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));if(n.split(' ').length<2||/unknown/.test(n))return;const b=birthOf(p).date||'',d=deathOf(p).date||'';
+      (g[[n,p.sex,nrm(b),nrm(d)].join('|')]=g[[n,p.sex,nrm(b),nrm(d)].join('|')]||[]).push(p)});
+    const score=p=>(p.fsid?4:0)+mediaOf(p.id).length*2+p.famc.length+p.fams.length+(p.srcId?0:1)+(p.notes.length?1:0);
+    Object.values(g).forEach(a=>{if(a.length<2)return;const byP={};a.forEach(p=>{(byP[pn(p)]=byP[pn(p)]||[]).push(p)});
+      const sn=p=>[...new Set(p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+      Object.entries(byP).forEach(([k,c0])=>{if(c0.length<2)return;const dated=birthOf(c0[0]).date||deathOf(c0[0]).date;
+       const subs=(dated||k)?[c0]:Object.entries(c0.reduce((o,p)=>{const x=sn(p);(o[x]=o[x]||[]).push(p);return o},{})).filter(([x])=>x).map(([,v])=>v);
+       subs.forEach(c=>{if(c.length<2)return;
+        c.sort((x,y)=>score(y)-score(x));const keep=c[0],drops=c.slice(1).filter(p=>!(keep.notSame||[]).includes(p.id)&&!(p.notSame||[]).includes(keep.id)&&canEditP(p.id)&&(p.fsid&&keep.fsid?fsNorm(p.fsid)===fsNorm(keep.fsid):true));
+        if(!drops.length||!canEditP(keep.id))return;
+        out.copies.push({label:niceName(keep.name)+(years(keep)?' ('+years(keep)+')':'')+(k?', child of '+k.split('+').map(x=>x.replace(/\b\w/g,m=>m.toUpperCase())).join(' + '):'')+': '+(drops.length+1)+' copies',id:keep.id,
+          fix:()=>drops.forEach(d=>{if(P[keep.id]&&P[d.id]){mergeInto(keep.id,d.id);rebuild()}})})})})})}
+  return out}
+function personDoc(p){const b=birthOf(p),d=deathOf(p);return{name:p.name,middle:p.middle,maiden:p.maiden||'',nick:p.nick||'',fsid:p.fsid||'',sex:p.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',deathCause:(p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause)||'',note:p.notes.join('\n\n')}}
+function showClean(){const box=document.getElementById('dup-list');const A=auditData();
+  const S=[['copies','Exact copies of the same person','Same name, sex, dates and parents. The copies are joined into one person, keeping links, photos and notes.',true],['couple','Same couple stored more than once','Each couple becomes one family with all their children and the marriage details.',true],
+    ['twice','Child listed twice','The extra listing is removed. The child stays with the family that has both parents.',true],
+    ['empty','Family links with fewer than two people','These do nothing in the tree and are removed.',true],
+    ['caps','Names in lower case or ALL CAPS','Each name is changed to normal capitals. Words like de, los and y stay lower case. Anything in brackets moves to the notes.',true],
+    ['alone','People not linked to anyone','Only ticked people are removed. Check each one first; you may prefer to link them instead.',false]];
+  const nDup=findDups().length;const total=S.reduce((n,[k])=>n+A[k].length,0);
+  box.innerHTML=`<p class="sub">${total?'Tick what to fix, then tap Fix selected. Every fix shows in History and can be undone there.':'No problems found in the stored data.'}${nDup?` There are also ${nDup} possible duplicate people: use Find duplicates for those.`:''}</p>`+
+    S.filter(([k])=>A[k].length).map(([k,t,d,on])=>`<div class="dup"><strong>${t} (${A[k].length})</strong><small>${d}</small>
+      ${A[k].map((it,i)=>`<label class="cl"><input type="checkbox" data-ck="${k}:${i}"${on||it.pre?' checked':''}> ${esc(it.label)}${it.id?` <button type="button" class="lnk" data-show="${esc(it.id)}">View</button>`:''}</label>`).join('')}</div>`).join('')+
+    (total?'<div class="acts"><button class="btn primary" type="button" id="clean-go">Fix selected</button></div>':'');
+  box.querySelectorAll('[data-show]').forEach(b=>b.onclick=e=>{e.preventDefault();setFocus(b.dataset.show)});
+  const go=document.getElementById('clean-go');if(go)go.onclick=async()=>{let sel=[...box.querySelectorAll('[data-ck]:checked')].map(c=>c.dataset.ck.split(':'));if(!sel.length)return;
+    go.disabled=true;go.textContent='Fixing…';const cp=sel.filter(([k])=>k==='copies');const run=cp.length?cp:sel;run.forEach(([k,i])=>A[k][+i].fix());rebuild();render(true);await flush();showClean();if(cp.length&&cp.length<sel.length)box.insertAdjacentHTML('afterbegin','<p class="sub">Copies joined first. Check the rest of the list again, then tap Fix selected.</p>');sel=run;
+    box.insertAdjacentHTML('afterbegin',`<p class="sub"><strong>Fixed ${sel.length} item${sel.length>1?'s':''}.</strong></p>`)}}
+function mergeInto(keep,drop){const K=P[keep],D=P[drop];if(!K||!D)return;
+  // relatives: point every family at the kept person
+  const touched={};
+  Object.values(F).forEach(f=>{if(f.husb!==drop&&f.wife!==drop&&!f.chil.includes(drop))return;const c=JSON.parse(JSON.stringify(f));
+    if(c.husb===drop)c.husb=keep;if(c.wife===drop)c.wife=keep;c.chil=[...new Set(c.chil.map(x=>x===drop?keep:x))];touched[c.id]=c});
+  const all=Object.values(F).map(f=>touched[f.id]||f);
+  // two families with the same couple (or a child listed under two copies of the same parents) become one
+  const seen={};all.forEach(f=>{if(!f.husb||!f.wife)return;const k=f.husb+'+'+f.wife;
+    if(seen[k]){const a=touched[seen[k].id]||(touched[seen[k].id]=JSON.parse(JSON.stringify(seen[k])));a.chil=[...new Set(a.chil.concat(f.chil))];
+      const am=a.ev.MARR||{},fm=f.ev.MARR||{};if(!am.date&&fm.date||!am.place&&fm.place)a.ev.MARR={date:am.date||fm.date||'',place:am.place||fm.place||''};
+      touched[f.id]=Object.assign(JSON.parse(JSON.stringify(f)),{deleted:true})}else seen[k]=touched[f.id]||f});
+  Object.values(touched).forEach(f=>queue('families',f.id,f.deleted?Object.assign(famData(f),{deleted:true}):famData(f)));
+  // details: combine both records; where they disagree, keep the first and save the other in the notes
+  const extra=[];
+  const prec=d=>!d?0:(/^\s*\d{1,2}\s+[A-Z]{3}/i.test(d)?3:/[A-Z]{3}\s+\d{4}/i.test(d)?2:1)-(/^(ABT|EST|CAL|BEF|AFT|BET)/i.test(d)?.5:0);
+  const yr=d=>((d||'').match(/\d{4}/)||[''])[0];
+  const toks=d=>nrm(d).split(' ').filter(w=>w&&!/^(abt|est|cal|bef|aft|bet|and)$/.test(w));
+  const pickDate=(a,b,label)=>{if(!a)return b||'';if(!b||nrm(a)===nrm(b))return a;const ta=toks(a),tb=toks(b);
+    if(ta.every(w=>tb.includes(w)))return prec(b)>=prec(a)?b:a;if(tb.every(w=>ta.includes(w)))return prec(a)>=prec(b)?a:b;
+    extra.push(label+' also recorded as '+fmtDate(b));return a};
+  const pickPlace=(a,b,label)=>{if(!a)return b||'';if(!b||a===b)return a;const x=nrm(a),y=nrm(b);if(y.includes(x))return b;if(x.includes(y))return a;extra.push(label+' also recorded as '+b);return a};
+  const longer=(a,b)=>{a=a||'';b=b||'';if(!a)return b;if(!b)return a;const x=nrm(a),y=nrm(b);return y.includes(x)&&y.length>x.length?b:a};
+  const kn=splitName(K.name),dn=splitName(D.name);
+  const km=K.middle!=null?K.middle:'',dm=D.middle!=null?D.middle:'';
+  const kg=km&&kn.given.endsWith(' '+km)?kn.given.slice(0,-km.length-1):kn.given,dg=dm&&dn.given.endsWith(' '+dm)?dn.given.slice(0,-dm.length-1):dn.given;
+  const g=longer(kg,dg),mid=longer(km,dm),sur=kn.surname||dn.surname,suf=kn.suffix||dn.suffix;
+  const name=`${g}${mid?' '+mid:''} /${sur}/${suf?' '+suf:''}`.trim();
+  const wn=n=>nrm(niceName(n)).split(' ').filter(Boolean);
+  if(!wn(D.name).every(w=>wn(name).includes(w)))extra.push('Also recorded as '+niceName(D.name));
+  if(dn.surname&&kn.surname&&nrm(dn.surname)!==nrm(kn.surname)&&!K.maiden&&!D.maiden&&(K.sex==='F'||D.sex==='F'))extra.push('Other surname: '+dn.surname);
+  const kb=birthOf(K),kd=deathOf(K),db_=birthOf(D),dd=deathOf(D);
+  const notes=[...new Set(K.notes.concat(D.notes))];
+  const o={name,middle:mid,maiden:K.maiden||D.maiden||'',nick:K.nick||D.nick||'',fsid:K.fsid||D.fsid||'',srcId:K.srcId||D.srcId||'',notSame:[...new Set([...(K.notSame||[]),...(D.notSame||[])])].filter(x=>x!==keep&&x!==drop),sex:K.sex!=='U'?K.sex:D.sex,
+    birthDate:pickDate(kb.date,db_.date,'Birth'),birthPlace:pickPlace(kb.place,db_.place,'Birthplace'),deathDate:pickDate(kd.date,dd.date,'Death'),deathPlace:pickPlace(kd.place,dd.place,'Death place'),deathCause:kd.cause||dd.cause||'',
+    note:notes.concat(extra.length?[extra.join('. ')+'.']:[]).join('\n\n')};
+  queue('people',keep,o);queue('people',drop,Object.assign({},OV_P[drop]||{},{deleted:true}));
+  // files follow the person
+  if(db)mediaOf(drop).forEach(m=>{m.person=keep;db.collection('media').doc(m.key).set(m).catch(()=>{})});
+  if(focusId===drop)focusId=keep;if(selId===drop)selId=keep}
+
+// ---------- import ----------
+const nrm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const by=p=>((birthOf(p).date||'').match(/\d{4}/)||[''])[0];
+function planImport(text){
+  const IP={},IF={};parseGed(text,'X:','import',IP,IF);
+  const upd=/^\s*1\s+_UPDATE\b/m.test(text); // a research update: matches only by id or listed names, newer facts win
+  const byKey={},byName={};Object.values(P).forEach(p=>{const n=nrm(niceName(p.name));(byName[n]=byName[n]||[]).push(p);const y=by(p);if(y)(byKey[n+'|'+y]=byKey[n+'|'+y]||[]).push(p);});
+  const byFs={},bySrc={};Object.values(P).forEach(p=>{if(p.fsid)byFs[p.fsid]=p;if(p.srcId)bySrc[p.srcId]=p});
+  const toks=d=>nrm(d).split(' ').filter(Boolean);
+  const ipPar={};Object.values(IF).forEach(f=>f.chil.forEach(c=>{ipPar[c]=[...new Set((ipPar[c]?ipPar[c].split('+'):[]).concat([f.husb,f.wife].filter(x=>x&&IP[x]).map(x=>nrm(niceName(IP[x].name)))))].sort().join('+')}));
+  const exPar=p=>[...new Set(p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name))))].sort().join('+');
+  const ipSp={};Object.values(IF).forEach(f=>{[[f.husb,f.wife],[f.wife,f.husb]].forEach(([a,b])=>{if(a&&b&&IP[b])(ipSp[a]=ipSp[a]||[]).push(nrm(niceName(IP[b].name)))})});
+  const exSp=p=>p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(x=>x&&P[x]).map(x=>nrm(niceName(P[x].name)));
+  const map={},newP=[],fill=[],matchedList=[];let matched=0;
+  Object.values(IP).forEach(ip=>{const n=nrm(niceName(ip.name)),y=by(ip);let m=null;
+    if(ip.treeId&&(P[ip.treeId]||bySrc[ip.treeId]))m=P[ip.treeId]||bySrc[ip.treeId];
+    else if(ip.fsid&&byFs[ip.fsid])m=byFs[ip.fsid];
+    else if(upd){for(const alt of (ip.matchNames||[])){const k=nrm(alt),c=(byName[k]||[]).filter((x,i,a)=>a.indexOf(x)===i);const cy=y?c.filter(p=>!by(p)||by(p)===y):c;const pick=cy.length===1?cy[0]:c.length===1?c[0]:null;if(pick){m=pick;break}}}
+    if(!m&&upd){const ib=(ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{}).date||'',idd=(ip.ev.DEAT||ip.ev.BURI||{}).date||'',ipn=ipPar[ip.id]||'';
+      if(n.split(' ').length>1&&(ib||idd||ipn)){const c=(byName[n]||[]).filter(p=>(p.sex===ip.sex||p.sex==='U'||ip.sex==='U')&&nrm(birthOf(p).date||'')===nrm(ib)&&nrm(deathOf(p).date||'')===nrm(idd)&&exPar(p)===ipn);if(c.length===1)m=c[0]}
+      else if(n.split(' ').length>1&&ipSp[ip.id]){const c=(byName[n]||[]).filter(p=>(p.sex===ip.sex||p.sex==='U'||ip.sex==='U')&&!birthOf(p).date&&!deathOf(p).date&&exSp(p).some(x=>ipSp[ip.id].includes(x)));if(c.length===1)m=c[0]}}
+    if(m||upd){}else if(y&&byKey[n+'|'+y]&&byKey[n+'|'+y].length===1)m=byKey[n+'|'+y][0];
+    else if(byName[n]&&byName[n].length===1&&(!y||!by(byName[n][0])))m=byName[n][0];
+    const b=ip.ev.BIRT||ip.ev.CHR||ip.ev.BAPM||{},d=ip.ev.DEAT||ip.ev.BURI||{};
+    if(m){matched++;map[ip.id]=m.id;matchedList.push([niceName(ip.name),m.id]);const mb=birthOf(m),md=deathOf(m);const extra=[];
+      const dt=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';if(nrm(a)===nrm(bb))return a;const ta=toks(a),tb=toks(bb);
+        if(ta.every(t=>tb.includes(t)))return bb;if(tb.every(t=>ta.includes(t)))return a;extra.push(label+' previously recorded as '+fmtDate(a));return bb};
+      const pl=(a,bb,label)=>{if(!upd||!a||!bb)return a||bb||'';const x=nrm(a),z=nrm(bb);if(x===z||x.includes(z))return a;if(z.includes(x))return bb;extra.push(label+' previously recorded as '+a);return bb};
+      let name=m.name;if(upd&&ip.rename&&nrm(niceName(ip.name))!==nrm(niceName(m.name))){name=ip.name;extra.push('Previously recorded as '+niceName(m.name)+'.')}
+      // a new status note (SOURCED:, PROBABLE:, UNVERIFIED...) replaces the old status note instead of sitting under it
+      const ST=/^\s*(UNVERIFIED|PROBABLE|SOURCED|CONFIRMED|VERIFIED)\b/i,newSt=upd&&ip.notes.some(t=>ST.test(t||''));
+      const old=(newSt?m.notes.join('\n\n').split(/\n{2,}/).filter(t=>!ST.test(t)):m.notes).join('\n\n'),add=ip.notes.filter(t=>t&&!nrm(old).includes(nrm(t)));
+      const o={name,middle:upd&&ip.rename?undefined:m.middle,maiden:m.maiden||ip.maiden||'',nick:(upd&&ip.nick)||m.nick||ip.nick||'',fsid:(upd&&ip.fsid)||m.fsid||ip.fsid||'',sex:m.sex!=='U'?m.sex:ip.sex,
+        birthDate:dt(mb.date,b.date,'Birth'),birthPlace:pl(mb.place,b.place,'Birthplace'),deathDate:dt(md.date,d.date,'Death'),deathPlace:pl(md.place,d.place,'Death place'),deathCause:(upd&&d.cause)||md.cause||d.cause||''};
+      o.note=upd?[...add.filter(t=>newSt&&ST.test(t)),old,...add.filter(t=>!(newSt&&ST.test(t))),...extra.map(x=>/\.$/.test(x)?x:x+'.')].filter(Boolean).join('\n\n'):(old||ip.notes.join('\n\n'));
+      if(o.middle===undefined)delete o.middle;
+      const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',m.notes.join('\n\n')].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
+      if(before!==after)fill.push([m.id,o])}
+    else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',srcId:ip.treeId||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
+  const famW=[];let famNew=0,famUpd=0;
+  Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
+    let ex=null;if(h&&w){const nw=famW.find(x=>x.husb===h&&x.wife===w&&/^N:/.test(x.id)&&!F[x.id]);if(nw){kids.forEach(k=>{if(!nw.chil.includes(k))nw.chil.push(k)});return}ex=Object.values(F).find(x=>x.husb===h&&x.wife===w)}
+    else if(h||w)ex=Object.values(F).find(x=>(x.husb===(h||null)||x.wife===(w||null))&&(h?x.husb===h:x.wife===w)&&kids.some(k=>x.chil.includes(k)));
+    if(!ex&&!h!==!w&&kids.length)ex=Object.values(F).find(x=>(h?x.husb===h&&!x.wife:x.wife===w&&!x.husb)&&kids.some(k=>x.chil.includes(k)));
+    const marr=f.ev.MARR||{};
+    if(ex){const add=kids.filter(k=>!ex.chil.includes(k));const em=ex.ev.MARR||{};
+      let md=em.date||marr.date||'',mp=em.place||marr.place||'';
+      if(upd&&marr.date&&em.date&&nrm(marr.date)!==nrm(em.date)){const ta=toks(em.date),tb=toks(marr.date);md=tb.every(t=>ta.includes(t))?em.date:marr.date}
+      if(upd&&marr.place&&em.place&&!nrm(em.place).includes(nrm(marr.place)))mp=marr.place;
+      const needM=md!==(em.date||'')||mp!==(em.place||'');
+      if(add.length||needM){const c=JSON.parse(JSON.stringify(ex));c.chil=c.chil.concat(add);if(needM)c.ev.MARR={date:md,place:mp};famW.push(c);famUpd++}}
+    else{famW.push({id:'N:@F'+uid()+'@',husb:h||null,wife:w||null,chil:kids,ev:(marr.date||marr.place)?{MARR:{date:marr.date||'',place:marr.place||''}}:{}});famNew++}});
+  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched,matchedList,upd}}
+window.__planImport=planImport;
+window.__applyImport=async plan=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
+  if(window.__PERM&&window.__PERM.editable)plan.newP.forEach(([id])=>window.__PERM.editable.add(id));rebuild();render(true);await flush()};
+// ---------- tree fixes (fixes.json in a research zip): link changes and merges, each group approved on its own ----------
+function fxFind(r){if(!r)return{err:'no person given'};let c=Object.values(P);
+  const kin=(ids,n)=>ids.some(x=>P[x]&&nrm(niceName(P[x].name)).includes(nrm(n)));
+  const par=p=>p.famc.flatMap(f=>F[f]?[F[f].husb,F[f].wife]:[]).filter(Boolean),sps=p=>p.fams.map(f=>F[f]&&spouseIn(F[f],p.id)).filter(Boolean),kids=p=>p.fams.flatMap(f=>F[f]?F[f].chil:[]);
+  if(r.fsid)c=c.filter(p=>p.fsid&&fsNorm(p.fsid)===fsNorm(r.fsid));
+  if(r.name){const ns=[r.name].concat(r.alt||[]).map(nrm);c=c.filter(p=>ns.includes(nrm(niceName(p.name))))}
+  if(r.born)c=c.filter(p=>by(p)===String(r.born));if(r.hasFs!==undefined)c=c.filter(p=>!!p.fsid===!!r.hasFs);
+  if(r.parent)c=c.filter(p=>kin(par(p),r.parent));if(r.spouse)c=c.filter(p=>kin(sps(p),r.spouse));if(r.child)c=c.filter(p=>kin(kids(p),r.child));
+  return c.length===1?{id:c[0].id}:{err:(r.name||r.fsid)+(c.length?': more than one match':': not found')}}
+function planFixes(js){return(js.fixes||[]).map((g,i)=>{const W={},errs=[];Object.entries(g.who||{}).forEach(([k,r])=>{const x=fxFind(r);if(x.id)W[k]=x.id;else errs.push(x.err)});
+  return{n:i,label:g.label||('Fix '+(i+1)),why:g.why||'',ops:g.ops||[],W,ok:!errs.length,err:errs.join('; ')}})}
+function fxApply(g){const W=g.W;
+  const fam=fr=>{const m=Object.values(F).filter(f=>(!fr.husb||f.husb===W[fr.husb])&&(!fr.wife||f.wife===W[fr.wife])&&(!fr.child||f.chil.includes(W[fr.child])));
+    if(m.length!==1)throw new Error('family not found ('+JSON.stringify(fr)+')');return m[0]};
+  const put=f=>queue('families',f.id,famData(f));const cl=f=>JSON.parse(JSON.stringify(f));
+  const dedupe=()=>{const seen={};Object.values(F).forEach(f=>{if(!f.husb||!f.wife)return;const k=f.husb+'+'+f.wife;const a=seen[k];if(!a){seen[k]=f;return}
+    const c=cl(a);c.chil=[...new Set(c.chil.concat(f.chil))];const am=c.ev.MARR||{},fm=f.ev.MARR||{};if(!am.date&&fm.date||!am.place&&fm.place)c.ev.MARR={date:am.date||fm.date||'',place:am.place||fm.place||''};
+    put(c);queue('families',f.id,Object.assign(famData(f),{deleted:true}));seen[k]=c})};
+  for(const o of g.ops){
+    if(o.op==='merge'){if(!P[W[o.keep]]||!P[W[o.drop]])throw new Error('merge: person missing');mergeInto(W[o.keep],W[o.drop])}
+    else if(o.op==='unlinkChild'){const f=cl(fam(o.fam));f.chil=f.chil.filter(x=>x!==W[o.child]);put(f)}
+    else if(o.op==='deleteIfAlone'){const id=W[o.who];if(P[id]&&!Object.values(F).some(f=>f.husb===id||f.wife===id||f.chil.includes(id)))queue('people',id,Object.assign({},OV_P[id]||personDoc(P[id]),{deleted:true}))}
+    else if(o.op==='notSame'){const a=W[o.a],b=W[o.b];[[a,b],[b,a]].forEach(([x,y])=>{const q=P[x];if(!q)return;const d=Object.assign({},OV_P[x]||personDoc(q));d.notSame=[...new Set([...(q.notSame||[]),y])];queue('people',x,d)})}
+    else if(o.op==='linkChild'){const f=cl(fam(o.fam)),c=W[o.child];if(!P[c])throw new Error('child missing');if(!f.chil.includes(c)){f.chil.push(c);put(f)}}
+    else if(o.op==='addChild'){const f=cl(fam(o.fam));if(f.chil.some(x=>P[x]&&nrm(niceName(P[x].name))===nrm(niceName(o.person.name))))continue;
+      const nid='N:@I'+uid()+'@';queue('people',nid,Object.assign({name:'',middle:'',maiden:'',nick:'',fsid:'',sex:'U',birthDate:'',birthPlace:'',deathDate:'',deathPlace:'',deathCause:'',note:''},o.person));
+      if(window.__PERM&&window.__PERM.editable)window.__PERM.editable.add(nid);f.chil.push(nid);put(f)}
+    else if(o.op==='edit'){const p=P[W[o.who]];if(!p)throw new Error('edit: person missing');const d=Object.assign({},OV_P[p.id]||personDoc(p),o.set||{});
+      let nt=d.note||'';(o.removeNote||[]).forEach(t=>{nt=nt.split(t).join('')});nt=nt.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+      if(o.addNote&&!nrm(nt).includes(nrm(o.addNote)))nt=(nt?nt+'\n\n':'')+o.addNote;d.note=nt;queue('people',p.id,d)}
+    else if(o.op==='setFamily'){const f=cl(fam(o.fam));if('husb'in o)f.husb=o.husb?W[o.husb]:null;if('wife'in o)f.wife=o.wife?W[o.wife]:null;put(f);rebuild();dedupe()}
+    else if(o.op==='deleteEmpty'){const id=W[o.who];Object.values(F).filter(f=>!f.chil.length&&[f.husb,f.wife].filter(Boolean).length===1&&(f.husb===id||f.wife===id)).forEach(f=>queue('families',f.id,Object.assign(famData(f),{deleted:true})))}
+    else throw new Error('unknown step '+o.op);
+    rebuild()}}
+window.__planFixes=planFixes;window.__toGed=()=>toGed();window.__dbg=()=>({P,F,OV_P,OV_F,queue,rebuild,famData,personDoc,flush,auditData});
+window.__applyFixes=async groups=>{const out=[];for(const g of groups){const sp=JSON.stringify(OV_P),sf=JSON.stringify(OV_F),wl=writes.length;try{fxApply(g);out.push([g.label,''])}catch(e){out.push([g.label,(e&&e.message)||String(e)]);writes.length=wl;[[OV_P,sp],[OV_F,sf]].forEach(([o,j])=>{for(const k in o)delete o[k];Object.assign(o,JSON.parse(j))});rebuild()}}
+  render(true);await flush();return out};
+document.getElementById('gedpick').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const box=document.getElementById('im-plan');if(!box)return;
+  let plan;try{plan=planImport(await f.text())}catch(err){box.innerHTML='<p class="hint">That file could not be read as GEDCOM.</p>';return}
+  if(!plan.total){box.innerHTML='<p class="hint">No people found in that file.</p>';return}
+  box.innerHTML=`<p class="sub"><strong>${esc(f.name)}</strong>: ${plan.total} people. ${plan.newP.length} new, ${plan.matched} already in the tree${plan.fill.length?` (${plan.fill.length} get missing details filled)`:''}. ${plan.famNew} new families, ${plan.famUpd} updated.</p>
+   <div class="acts"><button class="btn primary" type="button" id="im-go">Import</button><button class="btn" type="button" id="im-cancel">Cancel</button></div>`;
+  document.getElementById('im-cancel').onclick=()=>box.innerHTML='';
+  document.getElementById('im-go').onclick=async()=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
+    rebuild();render(true);box.innerHTML='<p class="sub">Importing…</p>';await flush();box.innerHTML=`<p class="sub">Imported ${plan.newP.length} new people. Use Find to look them up.</p>`}});
+
+stage.addEventListener('click',e=>{const el=e.target.closest('.person');if(el)openSheet(el.dataset.id)});
+stage.addEventListener('dblclick',e=>{const el=e.target.closest('.person');if(el)setFocus(el.dataset.id)});
+
+// ---------- focus / hash ----------
+const toHash=id=>id.replace(/[:@]/g,'').replace(/^([A-Z])(I)/,'$1-$2');
+const fromHash=h=>{const m=h.match(/^([A-Za-z])-?(I\d+)$/);return m?`${m[1].toUpperCase()}:@${m[2]}@`:null};
+function setFocus(id,fromNav){if(!P[id])return;focusId=id;render(false);openSheet(id);if(!fromNav){try{history.replaceState(null,'','#'+toHash(id))}catch(e){location.hash=toHash(id)}}}
+const homeId=()=>{if(DATA&&DATA.homeId&&P[DATA.homeId])return DATA.homeId;const h=DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase());return h?h.id:(Object.keys(P)[0]||null)};
+addEventListener('hashchange',()=>{const id=resolveId(fromHash(location.hash.slice(1)));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
+
+// ---------- controls ----------
+try{UP=+(localStorage.getItem('ft-up')||3);DOWN=+(localStorage.getItem('ft-down')||2);scale=+(localStorage.getItem('ft-zoom')||(innerWidth<600?.75:1))}catch(e){scale=innerWidth<600?.75:1}
+const upSel=document.getElementById('up'),dnSel=document.getElementById('down');upSel.value=String(UP);dnSel.value=String(DOWN);
+if(upSel.value!==String(UP)){UP=3;upSel.value='3'}if(dnSel.value!==String(DOWN)){DOWN=2;dnSel.value='2'}
+upSel.onchange=()=>{UP=+upSel.value;try{localStorage.setItem('ft-up',UP)}catch(e){}render(false)};
+dnSel.onchange=()=>{DOWN=+dnSel.value;try{localStorage.setItem('ft-down',DOWN)}catch(e){}render(false)};
+
+// ---------- list and stats ----------
+const NOW=new Date().getFullYear();
+const byr=p=>{const y=+((birthOf(p).date||'').match(/\d{4}/)||[0])[0];return y||null};
+const dyr=p=>{const y=+((deathOf(p).date||'').match(/\d{4}/)||[0])[0];return y||null};
+const lifespan=p=>{const b=byr(p),d=dyr(p);return b&&d&&d>=b&&d-b<120?d-b:null};
+const ageNow=p=>{const b=byr(p);return b&&!isDead(p)&&NOW-b<110?NOW-b:null};
+const surnameOf=p=>splitName(p.name).surname.trim();
+// related surnames shown as one family line (first name in each group is the line's label)
+const LINE_GROUPS=[['Santos','de los Santos','delos Santos','Timon','Timón'],['Guevara','Guevarra','Guivara'],['Reyes','de los Reyes','delos Reyes'],['Esguerra','Esquerra'],['Galvez','Galves'],['Fabian','Favian'],['Quijada','Quejada'],['Lansangan','Lamangan'],['Matias','Mathias'],['Vasques','Vazquez','Vasquez','Vazques'],['Coronel','Coronell']];
+const LG={};LINE_GROUPS.forEach(g=>g.forEach(n=>LG[nrm(n)]=g[0]));
+const lineOf=s=>{const k=nrm(s);return k?(LG[k]||LG[k.replace(/^(de los|delos|de la|dela|de|del) /,'')]||s.trim()):''};
+const firstOf=p=>(splitName(p.name).given.split(/\s+/)[0]||'').replace(/[^\p{L}.'-]/gu,'');
+const townOf=pl=>(pl||'').split(',')[0].trim();
+const bplace=p=>(p.ev.BIRT&&p.ev.BIRT.place)||(p.ev.CHR&&p.ev.CHR.place)||(p.ev.BAPM&&p.ev.BAPM.place)||'';
+let V={tab:'list',scope:'all',line:'',sort:'name',dir:1,q:'',past:false,lineTo:'father',relA:null,relB:null};
+function scopePeople(){const all=Object.values(P);
+  if(V.scope==='anc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);const f=parentsOf(x);if(f)st.push(f.husb,f.wife)}return all.filter(p=>s.has(p.id))}
+  if(V.scope==='desc'){const s=new Set(),st=[focusId];while(st.length){const x=st.pop();if(!x||s.has(x))continue;s.add(x);famsOf(x).forEach(f=>{st.push(...f.chil);const sp=spouseIn(f,x);if(sp)s.add(sp)})}return all.filter(p=>s.has(p.id))}
+  if(V.scope==='line'&&V.line){const L=nrm(lineOf(V.line));return all.filter(p=>nrm(lineOf(surnameOf(p)))===L||(p.maiden&&nrm(lineOf(p.maiden))===L))}
+  return all}
+function openViews(tab){if(tab)V.tab=tab;const box=document.getElementById('views');box.hidden=false;sheet.hidden=true;
+  const sc={},sv={};Object.values(P).forEach(p=>{const r=surnameOf(p);if(!r||r==='?')return;const s=lineOf(r);sc[s]=(sc[s]||0)+1;const v=niceName(r).trim(),vk=nrm(v);sv[s]=sv[s]||{};if(vk&&vk!==nrm(s)&&!sv[s][vk])sv[s][vk]=v});
+  const lines=Object.entries(sc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,60);
+  if(V.line)V.line=lineOf(V.line);if(!V.line&&lines.length)V.line=lines[0][0];
+  const fname=P[focusId]?niceName(P[focusId].name):'this person';
+  box.innerHTML=`<div class="vbar"><div class="tabs"><button class="btn" type="button" data-vt="list" aria-pressed="${V.tab==='list'}">List</button><button class="btn" type="button" data-vt="table" aria-pressed="${V.tab==='table'}">Table</button><button class="btn" type="button" data-vt="stats" aria-pressed="${V.tab==='stats'}">Stats</button><button class="btn" type="button" data-vt="bday" aria-pressed="${V.tab==='bday'}">Birthdays</button><button class="btn" type="button" data-vt="line" aria-pressed="${V.tab==='line'}">Line</button><button class="btn" type="button" data-vt="rel" aria-pressed="${V.tab==='rel'}">Relationship</button></div>
+    <select id="v-scope" aria-label="Who to include"${V.tab==='line'||V.tab==='rel'?' hidden':''}><option value="all"${V.scope==='all'?' selected':''}>Everyone</option><option value="anc"${V.scope==='anc'?' selected':''}>Ancestors of ${esc(fname)}</option><option value="desc"${V.scope==='desc'?' selected':''}>Descendants of ${esc(fname)}</option><option value="line"${V.scope==='line'?' selected':''}>A family line (surname)</option></select>
+    <select id="v-line" aria-label="Family line"${V.scope==='line'&&V.tab!=='line'&&V.tab!=='rel'?'':' hidden'}>${lines.map(([n,c])=>`<option value="${esc(n)}"${n===V.line?' selected':''}>${esc(n)}${sv[n]&&Object.keys(sv[n]).length?' / '+esc(Object.values(sv[n]).join(' / ')):''} (${c})</option>`).join('')}</select>
+    ${V.tab==='list'?`<input id="v-q" type="search" placeholder="Filter by name or place" value="${esc(V.q)}">`:''}
+    ${V.tab==='table'?`<input id="t-q" type="search" placeholder="Filter rows" value="${esc(V.tq||'')}">`:''}
+    <button class="btn vclose" type="button" id="v-close">Back to tree</button></div><div class="vbody" id="v-body"></div>`;
+  box.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>openViews(b.dataset.vt));
+  document.getElementById('v-scope').onchange=e=>{V.scope=e.target.value;openViews()};
+  document.getElementById('v-line').onchange=e=>{V.line=e.target.value;openViews()};
+  const qi=document.getElementById('v-q');if(qi)qi.oninput=()=>{V.q=qi.value;drawList()};
+  const tqi=document.getElementById('t-q');if(tqi)tqi.oninput=()=>{V.tq=tqi.value;drawTable()};
+  document.getElementById('v-close').onclick=()=>{box.hidden=true};
+  if(V.tab==='table')drawTable();else if(V.tab==='list')drawList();else if(V.tab==='bday')drawBirthdays();else if(V.tab==='line')drawLine();else if(V.tab==='rel')drawRel();else drawStats()}
+
+// ---------- table: spreadsheet-style editing ----------
+const TCOLS=[['first','First name',1],['middle','Middle',1],['last','Last name',1],['maiden','Maiden',1],['nick','Nickname',1],['suffix','Suffix',1],['sex','Sex',1],
+  ['bdate','Born',1],['bplace','Birthplace',1],['ddate','Died',1],['dplace','Death place',1],['dcause','Cause of death',1],['father','Father',0],['mother','Mother',0],['spouse','Spouse',0],['fsid','FamilySearch ID',1],['notes','Notes',0],['src','Source',0]];
+const TDEF=['first','middle','last','sex','bdate','bplace','ddate','father','mother'];
+V.tdirty=V.tdirty||{};
+function tcols(){try{const c=JSON.parse(localStorage.getItem('ft-tcols')||'null');if(Array.isArray(c)&&c.length)return c}catch(e){}return TDEF}
+function tval(p,k){const nm=nameParts(p),pf=parentsOf(p.id),b=birthOf(p),d=deathOf(p);
+  switch(k){case'first':return nm.given;case'middle':return nm.middle;case'last':return nm.surname;case'suffix':return nm.suffix;case'maiden':return p.maiden||'';case'nick':return p.nick||'';
+    case'sex':return p.sex==='M'?'M':p.sex==='F'?'F':'';case'bdate':return fmtDate(b.date||'');case'bplace':return b.place||'';case'ddate':return fmtDate(d.date||'');case'dplace':return d.place||'';case'dcause':return (p.ev.DEAT&&p.ev.DEAT.cause)||(p.ev.BURI&&p.ev.BURI.cause)||'';
+    case'father':return pf&&pf.husb&&P[pf.husb]?plateName(P[pf.husb]):'';case'mother':return pf&&pf.wife&&P[pf.wife]?plateName(P[pf.wife]):'';
+    case'spouse':return famsOf(p.id).map(f=>spouseIn(f,p.id)).filter(x=>x&&P[x]).map(x=>plateName(P[x])).join(', ');
+    case'fsid':return p.fsid||'';case'notes':return p.notes.join(' ').slice(0,120);case'src':return p.src||''}return''}
+const gedDate=v=>v.trim().toUpperCase().replace(/^ABOUT\b/,'ABT').replace(/^BEFORE\b/,'BEF').replace(/^AFTER\b/,'AFT').replace(/^EST\.?\b/,'EST');
+function drawTable(){const body=document.getElementById('v-body');const cols=tcols();const C=TCOLS.filter(c=>cols.includes(c[0]));const t=nrm(V.tq||'');
+  const cur=(p,k)=>{const d=V.tdirty[p.id];return d&&k in d?d[k]:tval(p,k)};
+  let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(C.map(c=>cur(p,c[0])).join(' ')+' '+niceName(p.name)).includes(w)));
+  if(V.tblank)ps=ps.filter(p=>C.some(c=>c[2]&&!cur(p,c[0])));
+  const sk=V.tsort||'last',dir=V.tdir||1;const dk=k=>/date$/.test(k);
+  ps.sort((a,b)=>{let x=cur(a,sk),y=cur(b,sk);if(dk(sk)){x=(x.match(/\d{4}/)||['9999'])[0];y=(y.match(/\d{4}/)||['9999'])[0]}else{x=nrm(x)||'~';y=nrm(y)||'~'}
+    if(x===y){x=nrm(cur(a,'last')+' '+cur(a,'first'));y=nrm(cur(b,'last')+' '+cur(b,'first'))}return (x<y?-1:x>y?1:0)*dir});
+  const nd=Object.keys(V.tdirty).length;const shown=ps.slice(0,V.tmax||200);
+  body.innerHTML=`<div class="tbar"><button class="btn" type="button" id="t-colbtn">Columns</button><label class="cl"><input type="checkbox" id="t-blank"${V.tblank?' checked':''}> Only rows with blanks</label>
+     <button class="btn primary" type="button" id="t-save"${nd?'':' disabled'}>${nd?'Save '+nd+' change'+(nd>1?'s':''):'No changes'}</button>${nd?'<button class="btn" type="button" id="t-undo">Discard</button>':''}</div>
+   <div id="t-cols" class="tcols" hidden>${TCOLS.map(c=>`<label class="cl"><input type="checkbox" data-col="${c[0]}"${cols.includes(c[0])?' checked':''}> ${c[1]}</label>`).join('')}</div>
+   <p class="vnote" style="margin:6px 0">${ps.length} ${ps.length===1?'person':'people'}${ps.length>shown.length?`, showing the first ${shown.length}`:''}. Type in a cell to change it; dates like 13 May 1911 or about 1885. Grey cells can't be edited here.</p>
+   <div class="tscroll"><table class="ptable etable"><thead><tr>${C.map(c=>`<th data-tsort="${c[0]}">${c[1]}${sk===c[0]?(dir>0?' ▲':' ▼'):''}</th>`).join('')}<th></th></tr></thead><tbody>
+   ${shown.map(p=>{const ed=canEditP(p.id);return`<tr data-id="${esc(p.id)}">${C.map(c=>{const v=cur(p,c[0]),dirty=V.tdirty[p.id]&&c[0] in V.tdirty[p.id];
+     if(!c[2]||!ed)return`<td class="ro">${esc(v)}</td>`;
+     if(c[0]==='sex')return`<td${dirty?' class="dirty"':''}><select data-k="sex"><option value=""${!v?' selected':''}>?</option><option value="M"${v==='M'?' selected':''}>M</option><option value="F"${v==='F'?' selected':''}>F</option></select></td>`;
+     return`<td${dirty?' class="dirty"':''}><input data-k="${c[0]}" value="${esc(v)}" autocomplete="off" style="--w:${({bplace:190,dplace:190,bdate:130,ddate:130,middle:100,suffix:60,nick:100})[c[0]]||120}px"></td>`}).join('')}<td><button type="button" class="lnk" data-tgo="${esc(p.id)}">View</button></td></tr>`}).join('')}</tbody></table></div>
+   ${ps.length>shown.length?'<div class="acts"><button class="btn" type="button" id="t-more">Show more</button></div>':''}`;
+  body.querySelectorAll('th[data-tsort]').forEach(h=>h.onclick=()=>{const k=h.dataset.tsort;if(V.tsort===k)V.tdir=-(V.tdir||1);else{V.tsort=k;V.tdir=1}drawTable()});
+  body.querySelectorAll('[data-k]').forEach(el=>{const ev=el.tagName==='SELECT'?'change':'input';el.addEventListener(ev,()=>{const id=el.closest('tr').dataset.id,k=el.dataset.k,p=P[id];
+    const orig=tval(p,k);const d=V.tdirty[id]=V.tdirty[id]||{};if(el.value===orig)delete d[k];else d[k]=el.value;if(!Object.keys(d).length)delete V.tdirty[id];
+    el.closest('td').classList.toggle('dirty',k in (V.tdirty[id]||{}));const n=Object.keys(V.tdirty).length,sv=document.getElementById('t-save');sv.disabled=!n;sv.textContent=n?'Save '+n+' change'+(n>1?'s':''):'No changes'})});
+  body.querySelectorAll('[data-tgo]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.tgo)});
+  document.getElementById('t-colbtn').onclick=()=>{const c=document.getElementById('t-cols');c.hidden=!c.hidden};
+  body.querySelectorAll('[data-col]').forEach(cb=>cb.onchange=()=>{const sel=[...body.querySelectorAll('[data-col]:checked')].map(x=>x.dataset.col);try{localStorage.setItem('ft-tcols',JSON.stringify(sel.length?sel:TDEF))}catch(e){}drawTable();document.getElementById('t-cols').hidden=false});
+  document.getElementById('t-blank').onchange=e=>{V.tblank=e.target.checked;drawTable()};
+  const more=document.getElementById('t-more');if(more)more.onclick=()=>{V.tmax=(V.tmax||200)+200;drawTable()};
+  const und=document.getElementById('t-undo');if(und)und.onclick=()=>{V.tdirty={};drawTable()};
+  document.getElementById('t-save').onclick=async()=>{const sv=document.getElementById('t-save');sv.disabled=true;sv.textContent='Saving…';let n=0;
+    for(const id in V.tdirty){const p=P[id];if(!p||!canEditP(id))continue;const d=V.tdirty[id],g=k=>k in d?d[k]:tval(p,k);
+      const o=Object.assign({},OV_P[id]||personDoc(p));const first=g('first').trim(),mid=g('middle').trim(),last=g('last').trim(),suf=g('suffix').trim();
+      o.name=`${first}${mid?' '+mid:''} /${last}/${suf?' '+suf:''}`.trim();o.middle=mid;o.maiden=g('maiden').trim();o.nick=g('nick').trim();o.sex=g('sex')||'U';o.fsid=fsNorm(g('fsid'));
+      o.birthDate=gedDate(g('bdate'));o.birthPlace=g('bplace').trim();o.deathDate=gedDate(g('ddate'));o.deathPlace=g('dplace').trim();o.deathCause=g('dcause').trim();queue('people',id,o);n++}
+    V.tdirty={};rebuild();render(true);await flush();drawTable();body.insertAdjacentHTML('afterbegin',`<p class="vnote"><strong>Saved ${n} ${n===1?'person':'people'}.</strong> Changes show in History.</p>`)}}
+function drawList(){const body=document.getElementById('v-body');const t=nrm(V.q);
+  let ps=scopePeople().filter(p=>!t||t.split(' ').every(w=>nrm(niceName(p.name)+' '+plateName(p)+' '+(p.maiden||'')+' '+(p.nick||'')+' '+bplace(p)+' '+(deathOf(p).place||'')).includes(w)));
+  const key={name:p=>nrm(surnameOf(p)+' '+niceName(p.name)),born:p=>byr(p)||9999,died:p=>dyr(p)||9999,age:p=>lifespan(p)??ageNow(p)??-1,place:p=>nrm(bplace(p)||'~')}[V.sort];
+  ps.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*V.dir});
+  const th=(k,l,c)=>`<th data-sort="${k}"${c?` class="${c}"`:''}>${l}${V.sort===k?(V.dir>0?' ▲':' ▼'):''}</th>`;
+  const sw=p=>`<span class="sx" style="background:var(--${p.sex==='M'?'m':p.sex==='F'?'f':'u'}-edge)" aria-hidden="true"></span>`;
+  body.innerHTML=`<p class="vnote" style="margin:0 0 8px">${ps.length} ${ps.length===1?'person':'people'}. Tap a person to see them in the tree.</p>
+   <table class="ptable"><thead><tr>${th('name','Name')}${th('born','Born')}${th('place','Birthplace','hide-s')}${th('died','Died')}${th('age','Age')}</tr></thead><tbody>
+   ${ps.map(p=>{const ls=lifespan(p),an=ageNow(p);return`<tr data-id="${esc(p.id)}"><td>${sw(p)}${esc(plateName(p))}${p.nick?` <small>“${esc(p.nick)}”</small>`:''}</td>
+     <td>${esc(fmtDate(birthOf(p).date||''))}</td><td class="hide-s">${esc(bplace(p))}</td><td>${esc(fmtDate(deathOf(p).date||''))}</td><td>${ls!=null?ls:an!=null?an+' <small>living</small>':''}</td></tr>`}).join('')}</tbody></table>`;
+  body.querySelectorAll('th[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;if(V.sort===k)V.dir=-V.dir;else{V.sort=k;V.dir=1}drawList()});
+  body.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{document.getElementById('views').hidden=true;setFocus(r.dataset.id)})}
+function drawStats(){const body=document.getElementById('v-body');const ps=scopePeople();const ids=new Set(ps.map(p=>p.id));
+  const n=ps.length,m=ps.filter(p=>p.sex==='M').length,f=ps.filter(p=>p.sex==='F').length,u=n-m-f;
+  const dead=ps.filter(isDead).length,living=ps.filter(p=>!isDead(p)&&byr(p)).length;
+  const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null;
+  const lsAll=ps.map(lifespan).filter(x=>x!=null),lsM=ps.filter(p=>p.sex==='M').map(lifespan).filter(x=>x!=null),lsF=ps.filter(p=>p.sex==='F').map(lifespan).filter(x=>x!=null);
+  const oldest=ps.filter(p=>lifespan(p)!=null).sort((a,b)=>lifespan(b)-lifespan(a))[0];
+  const fams=Object.values(F).filter(fm=>[fm.husb,fm.wife].some(x=>x&&ids.has(x)));const withKids=fams.filter(fm=>fm.chil.length);
+  const kidsAvg=withKids.length?(withKids.reduce((a,fm)=>a+fm.chil.length,0)/withKids.length).toFixed(1):null;
+  const pa={M:[],F:[]};ps.forEach(c=>{const cb=byr(c);const pf=parentsOf(c.id);if(!cb||!pf)return;[['M',pf.husb],['F',pf.wife]].forEach(([k,x])=>{const b=x&&P[x]&&byr(P[x]);if(b&&cb-b>=12&&cb-b<=65)pa[k].push(cb-b)})});
+  const ys=ps.map(byr).filter(Boolean);const y0=ys.length?Math.min(...ys):null,y1=ys.length?Math.max(...ys):null;
+  const tile=(k,v,d,extra)=>`<div class="tile"><div class="k">${k}</div><div class="v">${v??'–'}</div>${d?`<div class="d">${d}</div>`:''}${extra||''}</div>`;
+  const pct=x=>n?Math.round(100*x/n)+'%':'';
+  const split=`<div class="split" role="img" aria-label="${m} men, ${f} women${u?', '+u+' unknown':''}">${m?`<span title="Men: ${m}" style="flex:${m};background:var(--m-edge)"></span>`:''}${f?`<span title="Women: ${f}" style="flex:${f};background:var(--f-edge)"></span>`:''}${u?`<span title="Unknown: ${u}" style="flex:${u};background:var(--u-edge)"></span>`:''}</div>`;
+  const hbars=(rows,title,note)=>{const mx=Math.max(1,...rows.map(r=>r[1]));return`<div class="chart"><h3>${title}</h3>${rows.length?rows.map(([l,c])=>`<div class="hbar" title="${esc(l)}: ${c}"><span class="t">${esc(l)}</span><span class="b" style="width:${100*c/mx}%"></span><span class="n">${c}</span></div>`).join(''):'<p class="vnote">Not enough data.</p>'}${note?`<p class="vnote">${note}</p>`:''}</div>`};
+  const count=(fn,k8=8)=>{const o={};ps.forEach(p=>{const k=fn(p);if(k)o[k]=(o[k]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,k8)};
+  // births per decade
+  const dec={};ys.forEach(y=>{const d=Math.floor(y/10)*10;dec[d]=(dec[d]||0)+1});
+  let decs=[];if(ys.length){for(let d=Math.floor(y0/10)*10;d<=Math.floor(y1/10)*10;d+=10)decs.push([d,dec[d]||0])}
+  const dmx=Math.max(1,...decs.map(x=>x[1]));const step=Math.max(1,Math.ceil(decs.length/5));
+  const decChart=`<div class="chart"><h3>Births per decade</h3>${decs.length?`<div class="cols" role="img" aria-label="Births per decade">${decs.map(([d,c])=>`<span class="c" title="${d}s: ${c} born" style="height:${100*c/dmx}%"></span>`).join('')}</div>
+    <div class="colx">${decs.map(([d],i)=>`<span>${i%step===0?d+'s':''}</span>`).join('')}</div>`:'<p class="vnote">No birth years yet.</p>'}</div>`;
+  // average lifespan by birth century
+  const cen={};ps.forEach(p=>{const l=lifespan(p);if(l==null)return;const c=Math.floor(byr(p)/100)*100;(cen[c]=cen[c]||[]).push(l)});
+  const cenRows=Object.keys(cen).sort().map(c=>[c+'s ('+cen[c].length+')',avg(cen[c])]);
+  body.innerHTML=`<div class="tiles">
+    ${tile('People',n,y0?`born ${y0}–${y1}`:'')}
+    ${tile('Men · Women',`${m} · ${f}`,`${pct(m)} men, ${pct(f)} women${u?`, ${u} unknown`:''}`,split)}
+    ${tile('Living · Deceased',`${living} · ${dead}`,`${n-living-dead?(n-living-dead)+' unknown (no dates). ':''}Born after 1926 with no death date counts as living`)}
+    ${tile('Average lifespan',avg(lsAll)!=null?avg(lsAll)+' yrs':null,`${lsAll.length} people with both years`)}
+    ${tile('Men · Women lifespan',`${avg(lsM)??'–'} · ${avg(lsF)??'–'}`,'average years')}
+    ${tile('Longest life',oldest?lifespan(oldest)+' yrs':null,oldest?esc(plateName(oldest)):'')}
+    ${tile('Children per family',kidsAvg,`${withKids.length} families with children`)}
+    ${tile('Parents’ age at a birth',`${avg(pa.M)??'–'} · ${avg(pa.F)??'–'}`,'fathers · mothers, average')}
+  </div><div class="charts">
+    ${decChart}
+    ${hbars(cenRows,'Average lifespan by birth century','Years lived, for people with birth and death years. The count is in brackets.')}
+    ${hbars(count(p=>lineOf(surnameOf(p))),'Most common family lines')}
+    ${hbars(count(firstOf),'Most common first names')}
+    ${hbars(count(p=>townOf(bplace(p))),'Most common birthplaces')}
+    ${hbars(count(p=>isDead(p)&&causeGroup(causeOf(p)),16),'Causes of death',`${ps.filter(p=>isDead(p)&&causeOf(p)).length} of ${dead} deceased have a recorded cause, from death and burial records.`)}
+  </div><p class="vnote">Based on the dates in the tree. People without dates are counted where possible but left out of ages.</p>`}
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MON3={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+function bdayOf(p){const d=(birthOf(p).date||'').toUpperCase();if(/^(ABT|EST|CAL|BEF|AFT|BET)/.test(d))return null;const m=d.match(/(\d{1,2})\s+([A-Z]{3})/);if(!m||!(m[2] in MON3))return null;return{day:+m[1],mon:MON3[m[2]],year:+((d.match(/\d{4}/)||[0])[0])||null}}
+function drawBirthdays(){const body=document.getElementById('v-body');const today=new Date();today.setHours(0,0,0,0);
+  const rows=[];scopePeople().forEach(p=>{const b=bdayOf(p);if(!b)return;const dead=isDead(p);if(dead&&!V.past)return;
+    let next=new Date(today.getFullYear(),b.mon,b.day);if(next<today)next=new Date(today.getFullYear()+1,b.mon,b.day);
+    const days=Math.round((next-today)/864e5);rows.push({p,b,dead,next,days,turns:b.year?next.getFullYear()-b.year:null})});
+  rows.sort((a,b)=>a.days-b.days||plateName(a.p).localeCompare(plateName(b.p)));
+  const groups=[];rows.forEach(r=>{const k=r.next.getFullYear()+'-'+r.next.getMonth();let g=groups[groups.length-1];if(!g||g.k!==k)groups.push(g={k,label:MONTHS[r.next.getMonth()]+(r.next.getFullYear()!==today.getFullYear()?' '+r.next.getFullYear():''),rows:[]});g.rows.push(r)});
+  const when=d=>d===0?'<strong>Today</strong>':d===1?'Tomorrow':d<7?'In '+d+' days':'';
+  body.innerHTML=`<p class="vnote" style="margin:0 0 8px">${rows.length} ${V.past?'birthdays':'birthdays of living family'}, starting today. Only people with a full birth date (day and month) are listed.
+    <label style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;color:var(--fg)"><input type="checkbox" id="v-past"${V.past?' checked':''}> Include those who have passed</label></p>
+   ${groups.map(g=>`<h3 style="font-size:14px;margin:16px 0 4px">${g.label}</h3><table class="ptable"><tbody>${g.rows.map(r=>`<tr data-id="${esc(r.p.id)}"><td style="width:64px">${r.b.day} ${MONTHS[r.b.mon].slice(0,3)}</td>
+     <td><span class="sx" style="background:var(--${r.p.sex==='M'?'m':r.p.sex==='F'?'f':'u'}-edge)" aria-hidden="true"></span>${esc(plateName(r.p))}${r.dead?' <small>(passed)</small>':''}</td>
+     <td style="text-align:right;white-space:nowrap">${r.turns!=null?(r.dead?r.turns+' years since birth':'Turns '+r.turns):''} <small>${when(r.days)}</small></td></tr>`).join('')}</tbody></table>`).join('')||'<p class="vnote">No full birth dates yet. Add a day and month to someone’s birth date to see them here.</p>'}`;
+  const cb=document.getElementById('v-past');if(cb)cb.onchange=()=>{V.past=cb.checked;drawBirthdays()};
+  body.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{document.getElementById('views').hidden=true;setFocus(r.dataset.id)})}
+
+// ---------- direct line chart (one ancestor per generation) ----------
+function linePath(start,mode){const path=[start];let cur=start;const seen=new Set([start]);
+  let target=null,targetSet=null;
+  if(mode!=='father'&&mode!=='mother'){target=mode;const up=new Map();const st=[start];up.set(start,null);
+    while(st.length){const x=st.shift();if(x===target)break;const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!up.has(y)){up.set(y,x);st.push(y)}})}
+    if(up.has(target)){const chain=[];let x=target;while(x){chain.unshift(x);x=up.get(x)}return chain}return path}
+  for(;;){const f=parentsOf(cur);const nx=f&&(mode==='father'?f.husb||null:f.wife||null);if(!nx||seen.has(nx))break;path.push(nx);seen.add(nx);cur=nx}
+  return path}
+function drawLine(){const body=document.getElementById('v-body');const me=focusId;if(!P[me]){body.innerHTML='<p class="vnote">Pick someone in the tree first.</p>';return}
+  const anc=[];{const st=[[me,0]],seen=new Set([me]);while(st.length){const[x,d]=st.shift();const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!seen.has(y)){seen.add(y);anc.push([y,d+1]);st.push([y,d+1])}})}}
+  if(V.lineTo!=='father'&&V.lineTo!=='mother'&&!anc.some(a=>a[0]===V.lineTo))V.lineTo='father';
+  const path=linePath(me,V.lineTo); // path[0]=me, path[n]=oldest
+  const yr=d=>year(d||'');const ev=(lab,e)=>e&&(e.date||e.place)?`${lab} ${esc(fmtDate(e.date||''))}${e.place?' '+esc(townOf(e.place)):''}`:'';
+  const life=p=>[ev('b.',p.ev.BIRT)||ev('bapt.',p.ev.CHR||p.ev.BAPM),ev('d.',p.ev.DEAT)||ev('bur.',p.ev.BURI)].filter(Boolean).join(', ');
+  const nmb=id=>`<button type="button" data-go-line="${esc(id)}">${esc(plateName(P[id]))}</button>`;
+  const first=id=>esc(firstOf(P[id])||plateName(P[id]));
+  const pars=id=>{const f=parentsOf(id);if(!f)return'';const ps=[f.husb,f.wife].filter(Boolean);return ps.map(x=>esc(plateName(P[x]))).join(' + ')};
+  // a birth year for each generation: their own, else the spouse's, else from the next child or the marriage; gaps filled from the nearest known generations
+  const GAP=28;const known=path.map((id,k)=>{const p=P[id];if(byr(p))return{y:byr(p),how:'b'};const nxt=path[k-1];const fam=nxt?famsOf(id).find(f=>f.chil.includes(nxt)):null;
+    const sp=fam?spouseIn(fam,id):null;if(sp&&byr(P[sp]))return{y:byr(P[sp]),how:'s'};const ky=fam?fam.chil.map(c=>P[c]&&byr(P[c])).filter(Boolean):[];if(ky.length)return{y:Math.min(...ky)-GAP,how:'e'};
+    const my=fam&&fam.ev.MARR&&+((fam.ev.MARR.date||'').match(/\d{4}/)||[0])[0];if(my)return{y:my-25,how:'e'};return null});
+  const genYear=path.map((id,k)=>{if(known[k])return known[k];let a=-1,b=-1;for(let j=k-1;j>=0;j--)if(known[j]){a=j;break}for(let j=k+1;j<path.length;j++)if(known[j]){b=j;break}
+    if(a>=0&&b>=0)return{y:Math.round(known[a].y+(known[b].y-known[a].y)*(k-a)/(b-a)),how:'e'};if(a>=0)return{y:known[a].y-(k-a)*GAP,how:'e'};if(b>=0)return{y:known[b].y+(b-k)*GAP,how:'e'};return null});
+  const cards=path.slice().reverse().map((id,i,arr)=>{const g=arr.length-i;const gy=genYear[arr.length-1-i];const p=P[id];const child=arr[i+1];
+    let fam=null;if(child){fam=famsOf(id).find(f=>f.chil.includes(child))||null}
+    const sp=fam?spouseIn(fam,id):null;
+    const lines=[];const l1=[p&&life(p)?first(id)+' '+life(p):'',sp&&life(P[sp])?first(sp)+' '+life(P[sp]):''].filter(Boolean).join(' · ');if(l1)lines.push(l1);
+    if(fam&&fam.ev.MARR&&(fam.ev.MARR.date||fam.ev.MARR.place))lines.push('Married '+esc(fmtDate(fam.ev.MARR.date||''))+(fam.ev.MARR.place?', '+esc(townOf(fam.ev.MARR.place)):''));
+    if(fam&&fam.chil.length>1){const ks=fam.chil.map(k=>P[k]).filter(Boolean);lines.push('Children: '+ks.map(k=>esc(firstOf(k)||plateName(k))+(byr(k)?' '+byr(k):'')).join(', '))}
+    if(!child&&!l1&&p)lines.push(esc(life(p)||''));
+    const rem=[];if(sp&&pars(sp))rem.push(`${first(sp)}’s parents: <strong>${pars(sp)}</strong>`);
+    const oth=famsOf(id).filter(f=>f!==fam&&spouseIn(f,id)).map(f=>esc(plateName(P[spouseIn(f,id)])));if(child&&oth.length)rem.push(`${first(id)} also married ${oth.join(', ')}`);
+    const note=(p.notes||[])[0];if(note)rem.push(esc(note.length>180?note.slice(0,177)+'…':note));
+    return`<div class="lc-row"><div class="lc-gen">G${g}${gy?`<small class="lc-yr${gy.how==='b'?'':' est'}" title="${gy.how==='b'?'Birth year':gy.how==='s'?'Spouse\u2019s birth year':'Estimated'}">${gy.how==='b'?'':'c.'}${gy.y}</small>`:''}</div><div class="lc-card${id===me?' me':''}"><h4>${nmb(id)}${sp?`<span class="plus">+</span>${nmb(sp)}`:''}</h4>${lines.map(l=>`<p>${l}</p>`).join('')}</div>
+      <div class="lc-rem">${rem.map(r=>`<p>${r}</p>`).join('')}</div></div>${child?'<div class="lc-link"><span></span></div>':''}`}).join('');
+  const mode=V.lineTo==='father'?'father’s line':V.lineTo==='mother'?'mother’s line':'line to '+plateName(P[V.lineTo]);
+  const sur=lineOf(surnameOf(P[path[path.length-1]]));
+  body.innerHTML=`<div class="lc-wrap"><div class="lc-ctl"><label class="vnote" style="margin:0">Line<select id="lc-to" style="margin-left:6px">
+     <option value="father"${V.lineTo==='father'?' selected':''}>Father’s line (father to father)</option><option value="mother"${V.lineTo==='mother'?' selected':''}>Mother’s line (mother to mother)</option>
+     ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})</option>`).join('')}</select></label>
+     <button class="btn" type="button" id="lc-print">Print or save as PDF</button></div>
+   <h2 style="font-family:var(--font-display);margin:0 0 2px">${esc(sur||'Family')} Ancestry</h2><p class="vnote" style="margin:0 0 14px">${esc(plateName(P[me]))}’s ${esc(mode)} · ${path.length} generation${path.length>1?'s':''}. Pick another person in the tree to start from them. The year under each generation is a birth year; “c.” means estimated from the spouse, children, marriage or neighbouring generations (about 28 years apart).</p>
+   ${path.length>1?cards:cards+'<p class="vnote">No parents recorded on this line yet.</p>'}</div>`;
+  document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;drawLine()};
+  document.getElementById('lc-print').onclick=()=>window.print();
+  body.querySelectorAll('[data-go-line]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goLine)})}
+
+// ---------- how two people are related ----------
+function upMap(id){const m=new Map([[id,{d:0,down:null}]]);const q=[id];
+  while(q.length){const x=q.shift();const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!m.has(y)){m.set(y,{d:m.get(x).d+1,down:x});q.push(y)}})}return m}
+const ORD=['','','grand','great-grand'];
+function greats(n){return n<=0?'':(n===1?'great-':n===2?'great-great-':n+'× great-')}
+const nth=n=>n+(n%10===1&&n%100!==11?'st':n%10===2&&n%100!==12?'nd':n%10===3&&n%100!==13?'rd':'th');
+const times=n=>n===1?'once':n===2?'twice':n+' times';
+function relName(a,b,sex,half){return (half&&a>0&&b>0?'half ':'')+relName0(a,b,sex)}
+function relName0(a,b,sex,half){const g=(m,f,u)=>sex==='M'?m:sex==='F'?f:u;const H='';
+  if(a===0&&b===0)return'same person';
+  if(a===0)return b===1?g('son','daughter','child'):b===2?g('grandson','granddaughter','grandchild'):greats(b-2)+g('grandson','granddaughter','grandchild');
+  if(b===0)return a===1?g('father','mother','parent'):a===2?g('grandfather','grandmother','grandparent'):greats(a-2)+g('grandfather','grandmother','grandparent');
+  if(a===1&&b===1)return H+g('brother','sister','sibling');
+  if(b===1)return (a===2?'':greats(a-2))+H+g('uncle','aunt','uncle or aunt');
+  if(a===1)return (b===2?'':b===3?'grand-':greats(b-3)+'grand-')+H+g('nephew','niece','nephew or niece');
+  const c=Math.min(a,b)-1,r=Math.abs(a-b);return H+nth(c)+' cousin'+(r?' '+times(r)+' removed':'')}
+function bloodLinks(A,B){const ma=upMap(A),mb=upMap(B);const common=[...ma.keys()].filter(k=>mb.has(k));
+  const isAncOfOther=x=>common.some(y=>y!==x&&upMap(y).has(x));
+  const lcas=common.filter(x=>!isAncOfOther(x));
+  // pair spouses who are both closest common ancestors at the same depths
+  const out=[],used=new Set();
+  lcas.forEach(x=>{if(used.has(x))return;used.add(x);const sp=famsOf(x).map(f=>spouseIn(f,x)).find(y=>y&&lcas.includes(y)&&!used.has(y)&&ma.get(y).d===ma.get(x).d&&mb.get(y).d===mb.get(x).d);
+    if(sp)used.add(sp);out.push({top:sp?[x,sp]:[x],a:ma.get(x).d,b:mb.get(x).d,half:!sp&&ma.get(x).d>0&&mb.get(x).d>0})});
+  const chain=(m,top)=>{const c=[];let x=m.get(top).down;while(x){c.push(x);x=m.get(x).down}return c}; // from just below top down to the person
+  out.forEach(o=>{o.pa=chain(ma,o.top[0]);o.pb=chain(mb,o.top[0])});
+  return out.sort((x,y)=>(x.a+x.b)-(y.a+y.b))}
+function marriagePath(A,B){const prev=new Map([[A,null]]);const q=[A];
+  while(q.length){const x=q.shift();if(x===B)break;const f=parentsOf(x);const nb=[];
+    if(f)[f.husb,f.wife].forEach(y=>y&&nb.push([y,'parent']));famsOf(x).forEach(fm=>{const sp=spouseIn(fm,x);if(sp)nb.push([sp,'spouse']);fm.chil.forEach(c=>nb.push([c,'child']))});
+    for(const[y,k]of nb)if(!prev.has(y)){prev.set(y,[x,k]);q.push(y)}}
+  if(!prev.has(B))return null;const steps=[];let x=B;while(prev.get(x)){const[px,k]=prev.get(x);steps.unshift([px,k,x]);x=px}
+  // parent then child of the same parent = brother/sister
+  const out=[];for(let i=0;i<steps.length;i++){const s=steps[i],n=steps[i+1];if(n&&s[1]==='parent'&&n[1]==='child'){out.push([s[0],'sibling',n[2]]);i++}else out.push(s)}
+  return out}
+function stepWord(k,id){const sx=P[id].sex;const g=(m,f,u)=>sx==='M'?m:sx==='F'?f:u;
+  return k==='parent'?g('father','mother','parent'):k==='child'?g('son','daughter','child'):k==='spouse'?g('husband','wife','spouse'):g('brother','sister','sibling')}
+function inlawName(steps){const ks=steps.map(s=>s[1]).join(','),last=steps[steps.length-1][2];const sx=P[last].sex;const g=(m,f,u)=>sx==='M'?m:sx==='F'?f:u;
+  return {'spouse':g('husband','wife','spouse'),'spouse,parent':g('father-in-law','mother-in-law','parent-in-law'),'child,spouse':g('son-in-law','daughter-in-law','child-in-law'),
+    'spouse,sibling':g('brother-in-law','sister-in-law','sibling-in-law'),'sibling,spouse':g('brother-in-law','sister-in-law','sibling-in-law'),'parent,spouse':g('stepfather','stepmother','step-parent'),'spouse,child':g('stepson','stepdaughter','stepchild')}[ks]||null}
+function drawRel(){const body=document.getElementById('v-body');if(!V.relA||!P[V.relA])V.relA=focusId;if(V.relB&&!P[V.relB])V.relB=null;
+  const A=V.relA,B=V.relB;const nm=id=>esc(plateName(P[id]));
+  const chipB=(id,end)=>`<button type="button" class="rl-chip${end?' end':''}" data-go-rel="${esc(id)}">${nm(id)}${years(P[id])?`<small>${years(P[id])}</small>`:''}</button>`;
+  let html=`<div class="rl-pick">${['A','B'].map(k=>`<div class="exist"><label>${k==='A'?'First person':'Second person'}<input type="search" data-rp="${k}" placeholder="Search by name" value="${V['rel'+k]?esc(plateName(P[V['rel'+k]])):''}" autocomplete="off"></label><div class="results" data-rr="${k}" hidden></div></div>`).join('')}</div>`;
+  if(A&&B&&A!==B){const links=bloodLinks(A,B);const first=esc(firstOf(P[A])||plateName(P[A]));
+    links.forEach(o=>{const name=relName(o.a,o.b,P[B].sex,o.half);
+      const col=(arr,end)=>`<div class="rl-col">${arr.map((id,i)=>`<span class="rl-arrow">↓</span>${chipB(id,i===arr.length-1)}`).join('')}</div>`;
+      const top=o.top.map(id=>chipB(id,id===A||id===B)).join(' <span class="rl-arrow">+</span> ');
+      html+=`<div class="rl-card"><h3>${nm(B)} is ${first}’s ${esc(name)}</h3><p class="why">${o.a===0||o.b===0?'Direct line':'Closest shared ancestor'+(o.top.length>1?'s':'')}: ${o.top.map(nm).join(' & ')}${o.a&&o.b?` (${o.a} generation${o.a>1?'s':''} up from ${first}, ${o.b} from ${esc(firstOf(P[B])||plateName(P[B]))})`:''}</p>
+        <div class="rl-tree"><div class="rl-top">${top}</div>${o.a&&o.b?col(o.pa)+col(o.pb):`<div class="rl-col" style="grid-column:1/-1">${(o.a?o.pa:o.pb).map((id,i,arr)=>`<span class="rl-arrow">↓</span>${chipB(id,i===arr.length-1)}`).join('')}</div>`}</div></div>`});
+    const mp=marriagePath(A,B);const usesMarriage=mp&&mp.some(s=>s[1]==='spouse');
+    if(mp&&(usesMarriage||!links.length)){const word=inlawName(mp);
+      const phrase=mp.map(s=>stepWord(s[1],s[2])).join('’s ');
+      html+=`<div class="rl-card"><h3>${nm(B)} is ${first}’s ${esc(word||phrase)}</h3><p class="why">${links.length?'Also connected through marriage':'Connected through marriage'}${word?'':': '+first+'’s '+esc(phrase)} (${mp.length} step${mp.length>1?'s':''})</p>
+        <div class="rl-steps">${chipB(A,true)}${mp.map(s=>`<span class="rl-arrow">→ ${esc(stepWord(s[1],s[2]))} →</span>${chipB(s[2],s[2]===B)}`).join('')}</div></div>`}
+    if(!links.length&&!mp)html+=`<div class="rl-card"><h3>No connection found</h3><p class="why">These two aren’t linked in the tree yet.</p></div>`}
+  else html+=`<p class="vnote">${A===B&&B?'Pick two different people.':'Pick the second person to see how they’re related. The first person starts as whoever you selected in the tree.'}</p>`;
+  body.innerHTML=html;
+  body.querySelectorAll('[data-rp]').forEach(inp=>{const k=inp.dataset.rp,rs=body.querySelector(`[data-rr="${k}"]`);
+    inp.oninput=()=>{const hits=window.__treeSearch(inp.value);rs.innerHTML=hits.map(h=>`<button type="button" data-rpick="${esc(h.id)}">${esc(h.name)} <small>${esc(h.years)}</small></button>`).join('')||'<button type="button" disabled>No match</button>';rs.hidden=!inp.value.trim()};
+    rs.onclick=e=>{const b=e.target.closest('[data-rpick]');if(!b)return;V['rel'+k]=b.dataset.rpick;drawRel()}});
+  body.querySelectorAll('[data-go-rel]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goRel)})}
+document.getElementById('views-open').onclick=()=>openViews();
+document.getElementById('home').onclick=()=>{const h=homeId();if(h)setFocus(h)};
+if(DATA&&DATA.homeId&&P[DATA.homeId]){const hb=document.getElementById('home');hb.textContent='Me';hb.title='Go back to yourself'}
+document.getElementById('zin').onclick=()=>zoomTo(scale*1.2);
+document.getElementById('zout').onclick=()=>zoomTo(scale/1.2);
+scroller.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();const r=scroller.getBoundingClientRect();zoomTo(scale*Math.exp(-e.deltaY/300),e.clientX-r.left,e.clientY-r.top)}},{passive:false});
+let pinch=null;
+scroller.addEventListener('touchstart',e=>{if(e.touches.length===2){const[a,b]=e.touches;pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),s:scale}}},{passive:true});
+scroller.addEventListener('touchmove',e=>{if(pinch&&e.touches.length===2){e.preventDefault();const[a,b]=e.touches;const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);const r=scroller.getBoundingClientRect();
+  zoomTo(pinch.s*d/pinch.d,(a.clientX+b.clientX)/2-r.left,(a.clientY+b.clientY)/2-r.top)}},{passive:false});
+scroller.addEventListener('touchend',e=>{if(e.touches.length<2)pinch=null});
+// drag to pan with mouse
+let drag=null;
+scroller.addEventListener('mousedown',e=>{if(e.target.closest('.person'))return;drag={x:e.clientX,y:e.clientY,l:scroller.scrollLeft,t:scroller.scrollTop};scroller.style.cursor='grabbing'});
+addEventListener('mousemove',e=>{if(drag){scroller.scrollLeft=drag.l-(e.clientX-drag.x);scroller.scrollTop=drag.t-(e.clientY-drag.y)}});
+addEventListener('mouseup',()=>{drag=null;scroller.style.cursor=''});
+
+// search
+const q=document.getElementById('q'),res=document.getElementById('results');
+const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
+q.addEventListener('input',()=>{const t=norm(q.value.trim());if(!t){res.hidden=true;return}
+  const words=t.split(/\s+/);const hits=Object.values(P).map(p=>({p,k:norm(niceName(p.name)+' '+plateName(p)+' '+(p.maiden||'')+' '+(p.nick||''))})).filter(x=>words.every(w=>x.k.includes(w))).slice(0,30);
+  res.innerHTML=hits.length?hits.map(x=>`<button type="button" data-id="${x.p.id}">${esc(plateName(x.p))} <small>${years(x.p)}</small></button>`).join(''):'<button type="button" disabled>No match</button>';res.hidden=false});
+res.addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(!b)return;res.hidden=true;q.value='';q.blur();setFocus(b.dataset.id)});
+document.addEventListener('click',e=>{if(!e.target.closest('.search'))res.hidden=true});
+
+// connect the shared edits store and file saving when the viewer offers them
+(async()=>{const c=window.claude;if(!c||!c.use)return;
+  const[d,dl,as]=await Promise.all([c.use('db').catch(()=>null),c.use('downloads').catch(()=>null),c.use('assets').catch(()=>null)]);downloads=dl;assets=as;
+  if(!d){status('View only');return}db=d;let got=0;
+  const timer=setTimeout(()=>{if(got<2)status('Edits not loaded yet',true)},10000);
+  const apply=(coll,target)=>db.collection(coll).onSnapshot(snap=>{got++;if(got>=2)clearTimeout(timer);
+    for(const k in target)delete target[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.id)target[v.id]=v});
+    rebuild();const hadFocus=!!P[focusId];if(!hadFocus)focusId=homeId();render(!hadFocus?false:true);
+    if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},e=>status('Edits unavailable: '+(e&&e.code||''),true));
+  apply('people',OV_P);apply('families',OV_F);
+  db.collection('media').onSnapshot(snap=>{for(const k in MEDIA)delete MEDIA[k];snap.docs.forEach(doc=>{const v=doc.data();if(v&&v.key)MEDIA[v.key]=v});
+    render(true);if(!sheet.hidden&&!document.getElementById('edform')&&selId&&P[selId])openSheet(selId)},()=>{});
+  if(!sheet.hidden&&selId&&!document.getElementById('edform'))openSheet(selId)})();
+
+// bulk-attach research record images (the site's Research data panel hands over a zip's contents)
+window.__attachRecords=async(items,progress)=>{
+  if(!db||!assets||!canEdit())throw new Error('Sign in as an editor or admin first.');
+  const nm=s=>norm(niceName(s||'')).replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
+  const find=r=>{if(P[r.id])return r.id;{const h=r.id&&Object.values(P).find(p=>p.srcId===r.id);if(h)return h.id}if(r.fsid){const h=Object.values(P).find(p=>p.fsid&&p.fsid===String(r.fsid).toUpperCase());if(h)return h.id}const n=nm(r.name);const c=Object.values(P).filter(p=>nm(p.name)===n);
+    const y=r.year?c.filter(p=>by(p)===String(r.year)):c;const hit=y.length===1?y[0]:c.length===1?c[0]:null;return hit?hit.id:null};
+  let added=0,skipped=0;const missing=[],docs=[];const t0=Date.now();
+  for(let i=0;i<items.length;i++){const it=items[i];progress&&progress(i+1,items.length);
+    const pids=[...new Set(it.people.map(r=>{const id=find(r);if(!id)missing.push(r.name);return id}).filter(Boolean))];
+    const todo=pids.filter(pid=>!Object.values(MEDIA).some(m=>m.rec===it.file&&m.person===pid));
+    skipped+=pids.length-todo.length;if(!todo.length)continue;
+    const r=await assets.upload(await shrink(await it.blob()));
+    for(const pid of todo){const key='M-rec-'+keyOf(pid)+'-'+it.file.replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9]+/g,'-').slice(0,90);
+      const doc={id:key,key,asset:r.id,url:r.url,contentType:r.contentType,name:it.file,caption:it.caption||it.file,person:pid,rec:it.file,addedAt:new Date(t0+i).toISOString()};
+      if(it.profile&&!profileOf(pid)&&/^image\//.test(r.contentType||''))doc.profile=true;
+      MEDIA[key]=doc;docs.push(doc);added++}}
+  if(docs.length){if(db.bulk)await db.bulk(docs.map(d=>({coll:'media',id:d.key,data:d})));else for(const d of docs)await db.collection('media').doc(d.key).set(d)}
+  render(true);return{added,skipped,missing:[...new Set(missing)]}};
+
+window.__treeSearch=t=>{const w=nrm(t).split(' ').filter(Boolean);if(!w.length)return[];return Object.values(P).filter(p=>w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,15).map(p=>({id:p.id,name:niceName(p.name),years:years(p)}))};
+window.__personLabel=id=>P[id]?niceName(P[id].name)+(years(P[id])?' ('+years(P[id])+')':''):null;
+const start=resolveId(fromHash(location.hash.slice(1)));
+if(start&&!P[start])pendingStart=start;
+if(start&&P[start])setFocus(start,true);else if(homeId())setFocus(homeId());
+if(innerWidth<760)sheet.hidden=true;
+})();
+</script>

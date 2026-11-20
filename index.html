@@ -251,6 +251,15 @@ img{max-width:100%}
 <script type="text/plain" id="treecode">
 const DATA = window.__DATA;
 (function(){
+// people shared by the family tree (S ids, FamilySearch ids) and the Santiago 1990 study tree (R ids)
+const STUDY=[['S:@I1324@','','I10'],['S:@I1312@','G6ZG-K4Y','I11'],['S:@I1311@','G6ZG-2VR','I23'],['S:@I1310@','PMFV-ZVY','I26'],['S:@I1309@','PMFJ-9CQ','I69'],['S:@I1308@','PMFJ-XMX','I70'],['S:@I1307@','PMFJ-467','I71'],['S:@I1306@','PMFJ-4Y2','I78'],['S:@I1305@','PMFJ-73F','I77'],['S:@I1303@','PM6L-RFK','I75']];
+const IN_STUDY=!!(DATA&&DATA.study),ON_SITE=/infinitefate\.com$/.test(location.hostname)||location.protocol==='file:';
+function studyLink(p){if(!ON_SITE||!p)return'';if(IN_STUDY){const r=STUDY.find(x=>'R:@'+x[2]+'@'===p.id);return r?`<div class="fsl"><a href="../#${toHash(r[0])}">Open in our family tree ↗</a></div>`:''}
+  const r=STUDY.find(x=>x[0]===p.id||x[0]===p.srcId||(x[1]&&x[1]===p.fsid));return r?`<div class="fsl"><a href="soliman/#R-${r[2]}">See in the Solimán study tree (Santiago 1990) ↗</a></div>`:''}
+// a link may name a research id (S:@I1305@) for someone stored on the site under a new id: find them by source id or FamilySearch id
+function resolveId(id){if(!id||P[id])return id;const r=STUDY.find(x=>x[0]===id);const q=Object.values(P).find(p=>p.srcId===id||(r&&r[1]&&p.fsid===r[1]));return q?q.id:id}
+let pendingStart=null;
+setTimeout(()=>{if(!ON_SITE||IN_STUDY||document.getElementById('study-link'))return;const t=document.querySelector('header .tools');if(!t)return;const a=document.createElement('a');a.id='study-link';a.className='btn';a.href='soliman/';a.textContent='Solimán study tree';a.style.textDecoration='none';t.insertBefore(a,document.getElementById('export'))},0);
 const W=168,H=64,GX=14,GY=60;
 const P={},F={};
 const CLIP='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 7"/></svg>';
@@ -406,7 +415,7 @@ function layout(focus){
 const stage=document.getElementById('stage'),svg=document.getElementById('lines'),sizer=document.getElementById('sizer'),scroller=document.getElementById('scroller');
 let focusId=null,selId=null,scale=1,dims={w:0,h:0},fbox=null;
 const PAD=60;
-function render(keepView){
+function render(keepView){if(pendingStart){const q=resolveId(pendingStart);if(P[q]){pendingStart=null;focusId=q;keepView=false;setTimeout(()=>openSheet(q),0)}}
   if(!P[focusId]){const f=homeId();if(!f){stage.querySelectorAll('.person,.more').forEach(e=>e.remove());svg.innerHTML='';return}focusId=f}
   layout(focusId);
   const minX=Math.min(...boxes.map(b=>b.x)),minY=Math.min(...boxes.map(b=>b.y));
@@ -450,7 +459,7 @@ function openSheet(id){selId=id;const p=P[id];
   const marr=fams.map(f=>f.ev.MARR&&(f.ev.MARR.date||f.ev.MARR.place)?`${esc(fmtDate(f.ev.MARR.date||''))} ${f.ev.MARR.place?'· '+esc(f.ev.MARR.place):''}${spouseIn(f,id)?' ('+esc(plateName(P[spouseIn(f,id)]))+')':''}`:'').filter(Boolean);
   sheet.innerHTML=`<button class="btn close" type="button" aria-label="Close" data-close>✕</button>
    ${profileOf(id)?`<img class="avatar" src="${esc(profileOf(id).url)}" alt="" data-media="${esc(profileOf(id).key)}">`:''}<h2>${esc(plateName(p))}</h2>${p.nick||p.maiden?`<div class="sub">${[p.nick?'“'+esc(p.nick)+'”':'',p.maiden?(()=>{const n=nameParts(p);return 'Born '+esc(niceName(`${n.given} ${n.middle} ${p.maiden}`))})():''].filter(Boolean).join(' · ')}</div>`:''}<div class="sub">${p.sex==='M'?'Male':p.sex==='F'?'Female':''}${years(p)?' · '+years(p):''} · ${esc(p.src)}${p.edited?' · edited':''}</div>
-   <div class="fsl">${p.fsid?`<a href="${esc(fsUrl(p.fsid))}" target="_blank" rel="noopener">FamilySearch ${esc(p.fsid)} ↗</a>`:`<a href="${esc(fsSearch(p))}" target="_blank" rel="noopener">Find on FamilySearch ↗</a>${canEditP(id)?' <small>then copy their ID into Edit</small>':''}`}</div>
+   ${IN_STUDY?'':`<div class="fsl">${p.fsid?`<a href="${esc(fsUrl(p.fsid))}" target="_blank" rel="noopener">FamilySearch ${esc(p.fsid)} ↗</a>`:`<a href="${esc(fsSearch(p))}" target="_blank" rel="noopener">Find on FamilySearch ↗</a>${canEditP(id)?' <small>then copy their ID into Edit</small>':''}`}</div>`}
    <div class="acts">${id!==focusId?`<button class="btn primary" type="button" data-focus="${id}">Show tree from here</button>`:''}
    ${canEditP(id)?`<button class="btn" type="button" data-edit="${id}">Edit</button>
    <select class="btn" data-add="${id}" aria-label="Add a relative"><option value="">Add…</option><option value="father">Father</option><option value="mother">Mother</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="sibling">Brother or sister</option></select>`:''}${window.__adminTools&&(!window.__adminTools.limited||canEditP(id))?`<button class="btn" type="button" data-acct="${id}">Create account</button>`:''}</div>
@@ -460,6 +469,7 @@ function openSheet(id){selId=id;const p=P[id];
    ${sps.length?`<dt>Spouse</dt><dd class="rel">${sps.map(chip).join('')}</dd>`:''}
    ${sibs.length?`<dt>Siblings</dt><dd class="rel">${sibs.map(chip).join('')}</dd>`:''}
    ${kids.length?`<dt>Children</dt><dd class="rel">${kids.map(chip).join('')}</dd>`:''}</dl>
+   ${studyLink(p)}
    ${p.notes.map(n=>`<div class="note">${esc(n)}</div>`).join('')}
    ${filesSection(id)}`;
   sheet.hidden=false;sheet.scrollTop=0}
@@ -955,7 +965,7 @@ const toHash=id=>id.replace(/[:@]/g,'').replace(/^([A-Z])(I)/,'$1-$2');
 const fromHash=h=>{const m=h.match(/^([A-Za-z])-?(I\d+)$/);return m?`${m[1].toUpperCase()}:@${m[2]}@`:null};
 function setFocus(id,fromNav){if(!P[id])return;focusId=id;render(false);openSheet(id);if(!fromNav){try{history.replaceState(null,'','#'+toHash(id))}catch(e){location.hash=toHash(id)}}}
 const homeId=()=>{if(DATA&&DATA.homeId&&P[DATA.homeId])return DATA.homeId;const h=DATA&&DATA.home&&Object.values(P).find(p=>niceName(p.name).toLowerCase()===DATA.home.toLowerCase());return h?h.id:(Object.keys(P)[0]||null)};
-addEventListener('hashchange',()=>{const id=fromHash(location.hash.slice(1));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
+addEventListener('hashchange',()=>{const id=resolveId(fromHash(location.hash.slice(1)));if(id&&P[id]&&id!==focusId)setFocus(id,true)});
 
 // ---------- controls ----------
 try{UP=+(localStorage.getItem('ft-up')||3);DOWN=+(localStorage.getItem('ft-down')||2);scale=+(localStorage.getItem('ft-zoom')||(innerWidth<600?.75:1))}catch(e){scale=innerWidth<600?.75:1}
@@ -1291,7 +1301,8 @@ window.__attachRecords=async(items,progress)=>{
 
 window.__treeSearch=t=>{const w=nrm(t).split(' ').filter(Boolean);if(!w.length)return[];return Object.values(P).filter(p=>w.every(x=>nrm(niceName(p.name)).includes(x))).slice(0,15).map(p=>({id:p.id,name:niceName(p.name),years:years(p)}))};
 window.__personLabel=id=>P[id]?niceName(P[id].name)+(years(P[id])?' ('+years(P[id])+')':''):null;
-const start=fromHash(location.hash.slice(1));
+const start=resolveId(fromHash(location.hash.slice(1)));
+if(start&&!P[start])pendingStart=start;
 if(start&&P[start])setFocus(start,true);else if(homeId())setFocus(homeId());
 if(innerWidth<760)sheet.hidden=true;
 })();
