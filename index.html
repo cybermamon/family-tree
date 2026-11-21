@@ -966,8 +966,11 @@ function planImport(text){
       const before=[m.name,m.nick||'',m.fsid||'',m.sex,mb.date||'',mb.place||'',md.date||'',md.place||'',md.cause||'',m.notes.join('\n\n')].join('|'),after=[o.name,o.nick,o.fsid,o.sex,o.birthDate,o.birthPlace,o.deathDate,o.deathPlace,o.deathCause,o.note].join('|');
       if(before!==after)fill.push([m.id,o])}
     else{const nid='N:@I'+uid()+'@';map[ip.id]=nid;newP.push([nid,{maiden:ip.maiden||'',nick:ip.nick||'',fsid:ip.fsid||'',name:ip.name||'Unknown /?/',sex:ip.sex||'U',birthDate:b.date||'',birthPlace:b.place||'',deathDate:d.date||'',deathPlace:d.place||'',srcId:ip.treeId||'',deathCause:d.cause||'',note:ip.notes.join('\n\n')}])}});
-  const famW=[];let famNew=0,famUpd=0;
-  Object.values(IF).forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=f.chil.map(c=>map[c]).filter(Boolean);if(!h&&!w&&kids.length<2)return;
+  const famW=[];let famNew=0,famUpd=0;const loops=[];
+  // never add a child link that would make someone their own ancestor (an older update can disagree with a newer one)
+  const ancOf=x=>{const seen=new Set(),st=[x];while(st.length){const y=st.pop();for(const f of Object.values(F).concat(famW))if(f.chil.includes(y))[f.husb,f.wife].forEach(q=>{if(q&&!seen.has(q)){seen.add(q);st.push(q)}})}return seen};
+  const safeKids=(ks,h,w)=>ks.filter(k=>{const bad=[h,w].some(q=>q&&(q===k||ancOf(q).has(k)));if(bad)loops.push(k);return!bad});
+  Object.values(IF).reverse().forEach(f=>{const h=f.husb&&map[f.husb],w=f.wife&&map[f.wife],kids=safeKids(f.chil.map(c=>map[c]).filter(Boolean),h,w);if(!h&&!w&&kids.length<2)return;
     let ex=null;if(h&&w){const nw=famW.find(x=>x.husb===h&&x.wife===w&&/^N:/.test(x.id)&&!F[x.id]);if(nw){kids.forEach(k=>{if(!nw.chil.includes(k))nw.chil.push(k)});return}ex=Object.values(F).find(x=>x.husb===h&&x.wife===w)}
     else if(h||w)ex=Object.values(F).find(x=>(x.husb===(h||null)||x.wife===(w||null))&&(h?x.husb===h:x.wife===w)&&kids.some(k=>x.chil.includes(k)));
     if(!ex&&!h!==!w&&kids.length)ex=Object.values(F).find(x=>(h?x.husb===h&&!x.wife:x.wife===w&&!x.husb)&&kids.some(k=>x.chil.includes(k)));
@@ -979,7 +982,7 @@ function planImport(text){
       const needM=md!==(em.date||'')||mp!==(em.place||'');
       if(add.length||needM){const c=JSON.parse(JSON.stringify(ex));c.chil=c.chil.concat(add);if(needM)c.ev.MARR={date:md,place:mp};famW.push(c);famUpd++}}
     else{famW.push({id:'N:@F'+uid()+'@',husb:h||null,wife:w||null,chil:kids,ev:(marr.date||marr.place)?{MARR:{date:marr.date||'',place:marr.place||''}}:{}});famNew++}});
-  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched,matchedList,upd}}
+  return{total:Object.keys(IP).length,newP,fill,famW,famNew,famUpd,matched,matchedList,upd,loops}}
 window.__planImport=planImport;
 window.__applyImport=async plan=>{plan.newP.forEach(([id,o])=>queue('people',id,o));plan.fill.forEach(([id,o])=>queue('people',id,o));plan.famW.forEach(fm=>queue('families',fm.id,famData(fm)));
   if(window.__PERM&&window.__PERM.editable)plan.newP.forEach(([id])=>window.__PERM.editable.add(id));rebuild();render(true);await flush()};
