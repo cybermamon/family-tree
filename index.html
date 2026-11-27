@@ -181,6 +181,9 @@ select,.btn{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--b
 .lc-rem{border-left:2px dashed var(--border);padding-left:12px;font-size:13px;color:var(--muted)}
 .lc-rem p{margin:2px 0}.lc-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tc);border-radius:4px;padding:1px 5px;vertical-align:1px}
 .lc-src{display:block;font-size:12px;margin-top:4px;color:var(--muted);font-style:italic}.lc-rank{font-style:normal;color:var(--fg)}.lc-src b{font-style:normal;color:var(--fg);font-weight:600}
+.lc-multi{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:13px}.lc-multi p{margin:2px 0}
+.lc-paths{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.lc-paths .on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+@media print{.lc-paths{display:none}}
 .lc-tl{margin:22px 0 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}.lc-tl h3{margin:0 0 4px;font-family:var(--font-display);font-size:18px}
 .lc-ev{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--grid);font-size:13px}.lc-ev b{font-weight:600}
 @media (max-width:600px){.lc-ev{grid-template-columns:1fr;gap:2px}}
@@ -1218,10 +1221,21 @@ function lineTimeline(){return`<div class="lc-tl"><h3>Solimán–Tuambasán line
    <p class="vnote" style="margin:0 0 8px">SOURCED = in Santiago, “The Houses of Lakandula, Matandá and Solimán (1571–1898)”, Philippine Quarterly of Culture and Society 18 (1990): 39–73. FOUND = in Hagonoy church records. PROBABLE = fits, but no record ties it. UNVERIFIED = family legend or FamilySearch only.</p>
    ${LINE_TIMELINE.map(([d,l,t])=>`<div class="lc-ev"><b>${esc(d)}</b><div>${tagHtml(l)} ${esc(t)}</div></div>`).join('')}
    ${ON_SITE&&!IN_STUDY?'<p class="vnote"><a href="soliman/" style="color:var(--accent)">Open the full Solimán study tree</a></p>':''}</div>`}
+// every way 'start' descends from 'target' (for people who descend from the same ancestor twice); each path runs start..target
+function linePaths(start,target,max=6){const out=[];const walk=(x,acc)=>{if(out.length>=max)return;if(x===target){out.push(acc.slice());return}const f=parentsOf(x);if(!f)return;
+  [f.husb,f.wife].forEach(y=>{if(y&&!acc.includes(y)){acc.push(y);walk(y,acc);acc.pop()}})};walk(start,[start]);return out}
 function drawLine(){const body=document.getElementById('v-body');const me=focusId;if(!P[me]){body.innerHTML='<p class="vnote">Pick someone in the tree first.</p>';return}
   const anc=[];{const st=[[me,0]],seen=new Set([me]);while(st.length){const[x,d]=st.shift();const f=parentsOf(x);if(!f)continue;[f.husb,f.wife].forEach(y=>{if(y&&!seen.has(y)){seen.add(y);anc.push([y,d+1]);st.push([y,d+1])}})}}
   if(V.lineTo!=='father'&&V.lineTo!=='mother'&&!anc.some(a=>a[0]===V.lineTo))V.lineTo='father';
-  const path=linePath(me,V.lineTo); // path[0]=me, path[n]=oldest
+  // how many separate lines lead from each ancestor down to 'me'
+  const ancSet=new Set(anc.map(a=>a[0]));const dn=new Map([[me,1]]);
+  const down=a=>{if(dn.has(a))return dn.get(a);dn.set(a,0);let n=0;famsOf(a).forEach(f=>f.chil.forEach(c=>{if(c===me||ancSet.has(c))n+=down(c)}));dn.set(a,n);return n};
+  const multi=V.lineTo!=='father'&&V.lineTo!=='mother'?linePaths(me,V.lineTo):[];if(!(V.linePick<multi.length))V.linePick=0;
+  const path=multi.length?multi[V.linePick]:linePath(me,V.lineTo); // path[0]=me, path[n]=oldest
+  const viaName=pp=>plateName(P[pp[pp.length-2]]||P[pp[0]]);
+  const pathNote=multi.length>1?`<div class="lc-multi"><p><strong>${esc(plateName(P[me]))} descends from ${esc(plateName(P[V.lineTo]))} ${multi.length===2?'twice':multi.length+' times'}.</strong> Showing path ${V.linePick+1}: ${esc(multi[V.linePick].slice(1,-1).reverse().map(x=>plateName(P[x])).join(' > '))}.</p>
+    ${multi.map((pp,i)=>i===V.linePick?'':`<p>Also through: ${esc(pp.slice(1,-1).reverse().map(x=>plateName(P[x])).join(' > '))}.</p>`).join('')}
+    <div class="lc-paths">${multi.map((pp,i)=>`<button type="button" class="btn${i===V.linePick?' on':''}" data-lpath="${i}">Path ${i+1}: via ${esc(viaName(pp))}</button>`).join('')}</div></div>`:'';
   const yr=d=>year(d||'');const ev=(lab,e)=>e&&(e.date||e.place)?`${lab} ${esc(fmtDate(e.date||''))}${e.place?' '+esc(townOf(e.place)):''}`:'';
   const life=p=>[ev('b.',p.ev.BIRT)||ev('bapt.',p.ev.CHR||p.ev.BAPM),ev('d.',p.ev.DEAT)||ev('bur.',p.ev.BURI)].filter(Boolean).join(', ');
   const nmb=id=>`<button type="button" data-go-line="${esc(id)}">${esc(plateName(P[id]))}</button>`;
@@ -1249,11 +1263,12 @@ function drawLine(){const body=document.getElementById('v-body');const me=focusI
   const sur=lineOf(surnameOf(P[path[path.length-1]]));
   body.innerHTML=`<div class="lc-wrap"><div class="lc-ctl"><label class="vnote" style="margin:0">Line<select id="lc-to" style="margin-left:6px">
      <option value="father"${V.lineTo==='father'?' selected':''}>Father’s line (father to father)</option><option value="mother"${V.lineTo==='mother'?' selected':''}>Mother’s line (mother to mother)</option>
-     ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})</option>`).join('')}</select></label>
+     ${anc.filter(a=>a[1]>1).sort((a,b)=>a[1]-b[1]||plateName(P[a[0]]).localeCompare(plateName(P[b[0]]))).map(([a,d])=>{const k=down(a);return`<option value="${esc(a)}"${V.lineTo===a?' selected':''}>Up to ${esc(plateName(P[a]))} (G${d+1})${k>1?' ×'+k:''}</option>`}).join('')}</select></label>
      <button class="btn" type="button" id="lc-print">Print or save as PDF</button></div>
    <h2 style="font-family:var(--font-display);margin:0 0 2px">${esc(sur||(path.some(id=>lineInfo(P[id]))?'Solimán':'Family'))} Ancestry</h2><p class="vnote" style="margin:0 0 14px">${esc(plateName(P[me]))}’s ${esc(mode)} · ${path.length} generation${path.length>1?'s':''}. Pick another person in the tree to start from them. The year under each generation is a birth year; “c.” means estimated from the spouse, children, marriage or neighbouring generations (about 28 years apart).</p>
-   ${path.length>1?cards:cards+'<p class="vnote">No parents recorded on this line yet.</p>'}${path.some(id=>lineInfo(P[id]))?lineTimeline():''}</div>`;
-  document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;drawLine()};
+   ${pathNote}${path.length>1?cards:cards+'<p class="vnote">No parents recorded on this line yet.</p>'}${path.some(id=>lineInfo(P[id]))?lineTimeline():''}</div>`;
+  document.getElementById('lc-to').onchange=e=>{V.lineTo=e.target.value;V.linePick=0;drawLine()};
+  body.querySelectorAll('[data-lpath]').forEach(b=>b.onclick=()=>{V.linePick=+b.dataset.lpath;drawLine()});
   document.getElementById('lc-print').onclick=()=>window.print();
   body.querySelectorAll('[data-go-line]').forEach(b=>b.onclick=()=>{document.getElementById('views').hidden=true;setFocus(b.dataset.goLine)})}
 
